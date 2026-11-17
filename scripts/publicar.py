@@ -58,11 +58,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--notas", default="", help="qué cambia en esta versión (lo ven tus amigos al actualizar)")
     ap.add_argument("--subir", action="store_true", help="subir a GitHub Releases (pide confirmación)")
     ap.add_argument("--bots", nargs="*", type=Path, default=BOTS)
+    ap.add_argument("--ya-preparado", action="store_true",
+                    help="no vuelve a preparar nada: sube lo que ya está en dist-publicacion/vX.Y.Z (con --subir)")
     args = ap.parse_args(argv)
     if "/" not in args.repo or args.repo.count("/") != 1:
         raise SystemExit("--repo debe ser usuario/repositorio")
     ver = version()
     out = ROOT / "dist-publicacion" / f"v{ver}"
+    if args.ya_preparado:
+        if not (out / "latest.json").exists():
+            raise SystemExit(f"No hay nada preparado en {out}. Ejecuta antes sin --ya-preparado.")
+        latest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
+        return upload(args, ver, out, latest) if args.subir else 0
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
@@ -96,26 +103,37 @@ def main(argv: list[str] | None = None) -> int:
     }
     (out / "latest.json").write_text(json.dumps(latest, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    files = sorted(out.iterdir())
     print(f"\nPreparado en {out}:")
-    for f in files:
+    for f in sorted(out.iterdir()):
         print(f"  {f.name:45} {f.stat().st_size / 1e6:8.1f} MB")
     if not args.subir:
         print("\nNo se ha subido nada. Para publicar: añade --subir (te pedirá confirmación).")
         return 0
+    return upload(args, ver, out, latest)
 
-    # 5. Publicar (The Wall, regla 3: solo con tu confirmación escrita)
-    if shutil.which("gh") is None:
+
+def gh_exe() -> str | None:
+    return shutil.which("gh") or next((str(p) for p in [Path(r"C:\Program Files\GitHub CLI\gh.exe")] if p.exists()), None)
+
+
+def upload(args, ver: str, out: Path, latest: dict) -> int:
+    """5. Publicar (The Wall, regla 3: solo con la confirmación escrita de una persona en su terminal)."""
+    files = sorted(out.iterdir())
+    gh = gh_exe()
+    if gh is None:
         raise SystemExit("Falta la herramienta `gh` de GitHub para subir. No se ha publicado nada.")
     if not sys.stdin.isatty():
         raise SystemExit("Publicar exige confirmación en tu terminal (The Wall). No se ha publicado nada.")
-    resp = input(f"\n¿Publicar v{ver} en https://github.com/{args.repo} (público)? Escribe PUBLICAR: ")
+    print(f"\nSe subirán a https://github.com/{args.repo}/releases (PÚBLICO):")
+    for f in files:
+        print(f"  {f.name:45} {f.stat().st_size / 1e6:8.1f} MB")
+    resp = input(f"\n¿Publicar v{ver}? Escribe PUBLICAR y pulsa Enter: ")
     if resp.strip() != "PUBLICAR":
         print("Cancelado. No se ha publicado nada.")
         return 1
-    run(["gh", "release", "create", f"v{ver}", "--repo", args.repo, "--title", f"Lirio {ver}",
+    run([gh, "release", "create", f"v{ver}", "--repo", args.repo, "--title", f"Lirio {ver}",
          "--notes", latest["notes"], *files])
-    print(f"Publicado: https://github.com/{args.repo}/releases/tag/v{ver}")
+    print(f"\nPublicado: https://github.com/{args.repo}/releases/tag/v{ver}")
     return 0
 
 
