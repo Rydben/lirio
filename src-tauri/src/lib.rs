@@ -435,6 +435,20 @@ fn autostart_set(state: State<AppState>, on: bool) -> Result<bool, String> {
     Ok(autostart::enabled())
 }
 
+/// Lo último que ha hecho el bot (moderador: respuestas en el chat y órdenes de voz), de `logs/acciones.jsonl`.
+/// Solo lectura, como el resto del estado de los bots.
+#[tauri::command]
+fn bot_actions(state: State<AppState>, id: String, tipos: Vec<String>, limite: usize) -> Result<Vec<Value>, String> {
+    let m = state.module(&id)?;
+    let rel = m.manifest["paths"]["actions_log"].as_str().unwrap_or("logs/acciones.jsonl");
+    let Ok(txt) = std::fs::read_to_string(m.state_root().join(rel)) else { return Ok(vec![]) };
+    Ok(txt.lines().rev()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter(|v| tipos.is_empty() || v["type"].as_str().is_some_and(|t| tipos.iter().any(|x| x == t)))
+        .take(limite.clamp(1, 200))
+        .collect())
+}
+
 /// Diario de Lirio: entradas de los últimos `dias` días (la más reciente primero).
 #[tauri::command]
 fn journal_read(state: State<AppState>, dias: i64) -> Vec<journal::Entry> {
@@ -580,7 +594,7 @@ pub fn run() {
             signed_decision, kill_switch_on, kill_switch_off, start_bot, approver_key, start_page,
             wizard::first_run, wizard::get_catalog, wizard::install_bots, wizard::ai_status, wizard::test_claude,
             wizard::ollama_pull, wizard::install_client_secret, release_info, check_update, install_update,
-            journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set
+            journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions
         ])
         .run(tauri::generate_context!())
         .expect("error al arrancar Lirio");

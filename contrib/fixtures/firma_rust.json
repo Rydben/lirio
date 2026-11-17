@@ -8,7 +8,7 @@
     "formato": "lirio-aprobacion/1",
     "aprobador": "lirio",
     "llave_id": "lirio-ea4a6c63e29c",
-    "payload": "{\"modulo\":\"twitch-autoeditor\",\"operacion\":\"approve\",\"objetivo\":\"abc123\",\"accion\":\"youtube.publish_public\",\"clave\":\"C:\\\\out\\\\vídeo ñ.mp4\",\"emitida\":\"2026-11-16T20:00:00Z\",\"caduca\":\"2026-11-16T20:10:00Z\",\"nonce\":\"d76ec8c7bed93aefabca25a765c62e31\"}",
-    "firma": "p9mDDwFLfKC9TnRIiGkGOs4raDWU3VoL4MjEmtO2v7A8qVCQBAl8UQC6iePsX0f7U+4msARHylv1CuPMpUJ8CQ=="
+    "payload": "{\"modulo\":\"twitch-autoeditor\",\"operacion\":\"approve\",\"objetivo\":\"abc123\",\"accion\":\"youtube.publish_public\",\"clave\":\"C:\\\\out\\\\vídeo ñ.mp4\",\"emitida\":\"2026-11-16T20:00:00Z\",\"caduca\":\"2026-11-16T20:10:00Z\",\"nonce\":\"be62622d80a41e181449414ee653e37a\"}",
+    "firma": "pGQ3O4HVxNq2esD0d4mznP0hqxe2wmRSME3h+2ft07MKm6XtComJvjXThFcrtAx3/09Sf9XOHZYTZaSxPlqzBQ=="
   }
 }

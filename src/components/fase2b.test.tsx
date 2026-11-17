@@ -4,7 +4,9 @@ import { average, Bars, fmtDur } from './Insights'
 import { changedValues, fieldError, SettingsForm } from './SettingsForm'
 import { TwitchConnect } from './TwitchConnect'
 import { ToastProvider } from './ui'
+import { ChatPanel } from './ChatPanel'
 import { VoiceCommandTester } from './VoiceCommandTester'
+import { StoreProvider } from '../lib/store'
 import { VoiceRecorder } from './VoiceRecorder'
 
 const wrap = (ui: React.ReactNode) => render(<ToastProvider>{ui}</ToastProvider>)
@@ -55,6 +57,16 @@ describe('probar comandos de voz', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Probar' })) })
     expect(await screen.findByText(/Activar el modo lento/)).toBeInTheDocument()
     expect(screen.getByText(/No se ejecuta nada/)).toBeInTheDocument()
+  })
+})
+
+describe('chat del moderador', () => {
+  it('enseña los bans con «Deshacer ban» (gesto) y lo que hizo el bot', async () => {
+    wrap(<StoreProvider><ChatPanel botId="twitch-moderator" /></StoreProvider>)
+    expect(await screen.findByText('spammer123')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Deshacer ban' })).toHaveAttribute('title', expect.stringContaining('2 segundos'))
+    expect(await screen.findByText(/Respondió a ana/)).toBeInTheDocument()
+    expect(screen.getByText(/Orden de voz: modo_lento/)).toBeInTheDocument()
   })
 })
 

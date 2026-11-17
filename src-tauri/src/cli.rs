@@ -54,7 +54,7 @@ pub fn build_command_with_flags(m: &Module, command: &str, flags: &serde_json::M
 fn command_for(m: &Module, command: &str, args: &[String]) -> Result<Command, String> {
     let common = matches!(command, "approvals" | "doctor" | "upload" | "auth" | "hold" | "voz-texto" | "voz-dispositivos"
                                    | "ajustes-esquema" | "ajustes" | "ajustes-guardar" | "estadisticas" | "registrar-voz"
-                                   | "probar-voz" | "ultimo-directo");
+                                   | "probar-voz" | "ultimo-directo" | "bans-recientes");
     if !m.has_command(command) && !common {
         return Err(format!("{} no tiene el comando '{command}'", m.name()));
     }

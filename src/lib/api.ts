@@ -204,6 +204,7 @@ export const api = {
     inTauri() ? listen<VoiceEvent>('lirio://voz', (e) => cb(e.payload)) : demo.on('voz', cb),
   autostartGet: () => call<boolean>('autostart_get'),
   autostartSet: (on: boolean) => call<boolean>('autostart_set', { on }),
+  botActions: (id: string, tipos: string[], limite = 30) => call<Record<string, any>[]>('bot_actions', { id, tipos, limite }),
   journal: (dias: number) => call<JournalEntry[]>('journal_read', { dias }),
   journalNote: (texto: string) => call<void>('journal_note', { texto }),
   usageSummary: (dias: number) => call<UsageSummary>('usage_summary', { dias }),

@@ -22,7 +22,10 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("probar-voz", &[("--segundos", Kind::Int(3, 15)), ("--texto", Kind::Text)]),
     ("ultimo-directo", &[]),
     ("enroll", &[("--segundos", Kind::Int(10, 120)), ("--nombre", Kind::Text), ("--desde-pc", Kind::Flag),
-                 ("--dispositivo", Kind::Text)]),
+                 ("--dispositivo", Kind::Text), ("--desde-lirio", Kind::Flag)]),
+    ("bans-recientes", &[]),
+    // solo PIDE deshacer un ban: crea una solicitud que luego hay que aprobar con el gesto (aprobar-firmado)
+    ("deshacer", &[("--solicitar", Kind::Text)]),
     ("registrar-voz", &[("--segundos", Kind::Int(10, 120)), ("--dispositivo", Kind::Text), ("--desde-lirio", Kind::Flag)]),
     ("estadisticas", &[("--refrescar", Kind::Flag), ("--sin-ia", Kind::Flag)]),
     // permiso extra de solo lectura para leer los comentarios de tus vídeos (abre el navegador de Google)
@@ -58,7 +61,7 @@ pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<Strin
         }
     }
     // la grabación del editor sin consola: el gesto lo pone el botón de Lirio
-    if command == "registrar-voz" && !out.iter().any(|a| a == "--desde-lirio") {
+    if matches!(command, "registrar-voz" | "enroll") && !out.iter().any(|a| a == "--desde-lirio") {
         out.push("--desde-lirio".into());
     }
     Ok(out)
@@ -82,7 +85,7 @@ mod tests {
     #[test]
     fn builds_only_whitelisted_options() {
         assert_eq!(build_args("enroll", &m(json!({"--segundos": 30, "--nombre": "Ana", "--desde-pc": true}))).unwrap(),
-                   vec!["--segundos", "30", "--nombre", "Ana", "--desde-pc"]);
+                   vec!["--segundos", "30", "--nombre", "Ana", "--desde-pc", "--desde-lirio"]);
         assert_eq!(build_args("connect", &m(json!({"--iniciar": true, "--streamer": false}))).unwrap(), vec!["--iniciar"]);
         assert!(build_args("enroll", &m(json!({"--borrar-todo": true}))).is_err());
         assert!(build_args("approve", &m(json!({}))).is_err(), "approve nunca va por aquí");
@@ -94,7 +97,8 @@ mod tests {
         assert!(build_args("enroll", &m(json!({"--segundos": 5000}))).is_err());
         assert!(build_args("enroll", &m(json!({"--nombre": "--json"}))).is_err());
         assert!(build_args("enroll", &m(json!({"--nombre": "a\nb"}))).is_err());
-        assert_eq!(build_args("enroll", &m(json!({"--nombre": "  "}))).unwrap(), Vec::<String>::new());
+        // un nombre vacío no se pasa (solo queda la marca de que la grabación la pide Lirio)
+        assert_eq!(build_args("enroll", &m(json!({"--nombre": "  "}))).unwrap(), vec!["--desde-lirio"]);
     }
 
     #[test]

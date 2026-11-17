@@ -2,6 +2,7 @@
 // El bot de vídeo tiene cola de subida, vídeos en espera, aprobaciones, estadísticas y ajustes.
 import { useCallback, useEffect, useState } from 'react'
 import { ApprovalCard, useSignedDecision } from '../components/Approvals'
+import { ChatPanel } from '../components/ChatPanel'
 import { Insights } from '../components/Insights'
 import { SettingsForm } from '../components/SettingsForm'
 import { TwitchConnect } from '../components/TwitchConnect'
@@ -14,7 +15,7 @@ import { keyProblem, stateLabel, stateTone } from '../lib/mood'
 import { useStore } from '../lib/store'
 import { botSummary } from './Home'
 
-export type BotTab = 'resumen' | 'cola' | 'espera' | 'aprobaciones' | 'estadisticas' | 'twitch' | 'voz' | 'ajustes'
+export type BotTab = 'resumen' | 'cola' | 'espera' | 'aprobaciones' | 'estadisticas' | 'chat' | 'twitch' | 'voz' | 'ajustes'
 
 const VIDEO_TABS: [BotTab, string][] = [
   ['resumen', 'Resumen'], ['cola', 'Cola de subida'], ['espera', 'En espera'],
@@ -55,7 +56,7 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
   const base = isVideo ? VIDEO_TABS : OTHER_TABS
   const tabs: [BotTab, string][] = [
     ...base.slice(0, -1),
-    ...(hasTwitch ? [['twitch', 'Twitch'] as [BotTab, string]] : []),
+    ...(hasTwitch ? [['chat', 'Chat'] as [BotTab, string], ['twitch', 'Twitch'] as [BotTab, string]] : []),
     ...(caps.voz ? [['voz', 'Huella de voz'] as [BotTab, string]] : []),
     base[base.length - 1],
   ]
@@ -83,6 +84,7 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
             : <div className="stack">{approvals.map((a) => <ApprovalCard key={a.id} bot={bot} a={a} />)}</div>
         )}
         {tab === 'estadisticas' && <Insights botId={bot.id} />}
+        {tab === 'chat' && <ChatPanel botId={bot.id} />}
         {tab === 'twitch' && (
           <div className="grid-2">
             <section className="panel"><h3>Cuenta del bot</h3><TwitchConnect botId={bot.id} /></section>

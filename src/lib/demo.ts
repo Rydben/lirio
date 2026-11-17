@@ -83,6 +83,10 @@ export const demo = {
         { at: now(), kind: 'subida', bot: 'twitch-autoeditor', text: 'La subida no terminó', ok: false },
       ] as T
       case 'journal_note': return undefined as T
+      case 'bot_actions': return [
+        { type: 'reply', user: 'ana', question: '¿a qué hora es el directo?', answer: 'Los viernes a las 20:00', at: now() },
+        { type: 'voice_command', heard: 'lirio pon el modo lento', similarity: 0.8, is_streamer: true, command: 'modo_lento', at: now() },
+      ] as T
       case 'autostart_get': return false as T
       case 'autostart_set': return Boolean(args?.on) as T
       case 'run_with': {
@@ -96,6 +100,9 @@ export const demo = {
         if (c === 'ajustes') return { ...ok, data: { valores: { 'canal.nombre': 'Alex', 'edicion.zoom': true, 'edicion.shorts': 3 } } } as T
         if (c === 'probar-voz') return { ...ok, data: { oido: 'lirio pon el modo lento', palabra_activacion: true, es_tu_voz: true,
           similitud: 0.82, comando: 'modo_lento', descripcion: 'Activar el modo lento del chat (30 s)', ejecutado: false } } as T
+        if (c === 'bans-recientes') return { ...ok, data: { bans: [{ id: 'b1', at: now(), login: 'spammer123', reason: 'enlaces',
+          message: 'compra seguidores en…', category: 'spam', rule: 'R3', immediate: true, undone: false }] } } as T
+        if (c === 'deshacer') return { ...ok, data: { solicitud: { id: 's1', action: 'twitch.unban', key: 'unban:spammer123', status: 'pending' } } } as T
         if (c === 'connect') return { ...ok, data: { user_code: 'ABCD-1234', cuenta: 'la del bot', bot_login: 'alex_bot' } } as T
         return ok as T
       }
