@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512">
+  <title>Lirio</title>
+  <defs>
+    <filter id="neon" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="1.6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0b0816"/>
+  <g fill="none" stroke="#22d3ee" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" filter="url(#neon)">
+    <path d="M32 6 C39 14 41 23 32 36 C23 23 25 14 32 6 Z"/>
+    <path d="M29 40 C27 31 21 24 14 24 C8 24 6 31 10 35 C13 38 17 36 16 32"/>
+    <path d="M35 40 C37 31 43 24 50 24 C56 24 58 31 54 35 C51 38 47 36 48 32"/>
+    <path d="M21 41 H43"/>
+    <path d="M32 45 V56"/>
+    <path d="M29 45 C27 51 23 54 18 53"/>
+    <path d="M35 45 C37 51 41 54 46 53"/>
+  </g>
+</svg>

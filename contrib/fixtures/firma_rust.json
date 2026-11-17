@@ -1,0 +1,14 @@
+{
+  "llave": {
+    "alg": "ed25519",
+    "llave_publica": "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=",
+    "id": "lirio-ea4a6c63e29c"
+  },
+  "aprobacion": {
+    "formato": "lirio-aprobacion/1",
+    "aprobador": "lirio",
+    "llave_id": "lirio-ea4a6c63e29c",
+    "payload": "{\"modulo\":\"twitch-autoeditor\",\"operacion\":\"approve\",\"objetivo\":\"abc123\",\"accion\":\"youtube.publish_public\",\"clave\":\"C:\\\\out\\\\vídeo ñ.mp4\",\"emitida\":\"2026-11-16T20:00:00Z\",\"caduca\":\"2026-11-16T20:10:00Z\",\"nonce\":\"8031f2bd8b3dea16babea30cd194762f\"}",
+    "firma": "1Jk1JBtFv/gN2bsaL+2qSLrVyhbrsr+tR9E4iMvROPe4oYcR/XlOfCFEK6xNV01pkopNzGT0UvQUgChI0RTzBQ=="
+  }
+}

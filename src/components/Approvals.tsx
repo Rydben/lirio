@@ -1,0 +1,75 @@
+// Tarjetas de aprobación (The Wall): aprobar o rechazar manteniendo pulsado 2 s.
+import { api, type Approval, type BotView, type SignedOperation } from '../lib/api'
+import { useStore } from '../lib/store'
+import { HoldButton } from './HoldButton'
+import { Icon, timeAgo, useToast } from './ui'
+
+const ACTION_TEXT: Record<string, string> = {
+  'youtube.schedule_publish': 'Programar la publicación en YouTube (se hará público a la hora indicada)',
+  'youtube.publish_public': 'Publicar en YouTube en público ahora',
+  'youtube.publish_unlisted': 'Subir a YouTube como oculto',
+  'youtube.upload_private': 'Subir a YouTube como privado',
+  'files.delete_source_download': 'Borrar el VOD descargado (ya editado)',
+  'files.delete_uploaded_render': 'Borrar el vídeo ya subido (se guardan miniatura y datos)',
+  'files.delete_temp': 'Borrar archivos temporales',
+  'twitch.ban': 'Banear a un usuario del chat',
+  'twitch.timeout_long': 'Timeout largo a un usuario del chat',
+  'twitch.protect_mode': 'Activar el modo escudo del chat',
+}
+
+export function actionText(a: Approval): string {
+  return ACTION_TEXT[a.action] ?? a.action
+}
+
+function detailText(a: Approval): string | null {
+  const d = a.details ?? {}
+  const parts = [d.title, d.user && `usuario ${d.user}`, d.reason].filter(Boolean) as string[]
+  if (parts.length) return parts.join(' · ')
+  if (a.key) return a.key.split(/[\\/]/).pop() ?? a.key
+  return null
+}
+
+/** Una decisión firmada: el núcleo comprueba el gesto, firma y se la pasa al bot. */
+export function useSignedDecision() {
+  const toast = useToast()
+  const { refresh } = useStore()
+  return async (token: string, bot: string, op: SignedOperation, target: string, accion?: string, clave?: string) => {
+    try {
+      const r = await api.signedDecision(token, bot, op, target, accion, clave)
+      toast(r.ok ? 'ok' : 'error', r.ok ? DONE[op] : r.message)
+    } catch (e) {
+      toast('error', String(e))
+    }
+    refresh()
+  }
+}
+
+const DONE: Record<SignedOperation, string> = {
+  approve: 'Aprobado. El bot seguirá con ello en su próxima vuelta.',
+  deny: 'Rechazado. El bot no lo hará.',
+  liberar: 'Vídeo liberado: el bot lo editará en su próxima vuelta.',
+  reintentar: 'Listo: el bot lo volverá a intentar.',
+}
+
+export function ApprovalCard({ bot, a }: { bot: BotView; a: Approval }) {
+  const decide = useSignedDecision()
+  const supported = bot.commands.includes('aprobar-firmado')
+  const detail = detailText(a)
+  return (
+    <div className="approval">
+      <div className="approval__icon"><Icon name="shield" /></div>
+      <div className="approval__body">
+        <div className="approval__title">{actionText(a)}</div>
+        {detail && <div className="approval__detail">{detail}</div>}
+        <div className="approval__meta">{bot.name} · {timeAgo(a.created_at)} · solicitud {a.id}</div>
+        {!supported && <div className="approval__warn">Este bot aún no acepta aprobaciones desde Lirio.</div>}
+      </div>
+      <div className="approval__actions">
+        <HoldButton tone="ghost" disabled={!supported} onBegin={api.gestureBegin}
+          onComplete={(t) => decide(t, bot.id, 'deny', a.id, a.action, a.key)}>Rechazar</HoldButton>
+        <HoldButton disabled={!supported} onBegin={api.gestureBegin}
+          onComplete={(t) => decide(t, bot.id, 'approve', a.id, a.action, a.key)}>Aprobar</HoldButton>
+      </div>
+    </div>
+  )
+}
