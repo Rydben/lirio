@@ -94,6 +94,8 @@ export const demo = {
           { clave: 'edicion.zoom', tipo: 'booleano', titulo: 'Zooms automáticos' },
           { clave: 'edicion.shorts', tipo: 'entero', titulo: 'Shorts por directo', min: 0, max: 5 }] }] } } as T
         if (c === 'ajustes') return { ...ok, data: { valores: { 'canal.nombre': 'Alex', 'edicion.zoom': true, 'edicion.shorts': 3 } } } as T
+        if (c === 'probar-voz') return { ...ok, data: { oido: 'lirio pon el modo lento', palabra_activacion: true, es_tu_voz: true,
+          similitud: 0.82, comando: 'modo_lento', descripcion: 'Activar el modo lento del chat (30 s)', ejecutado: false } } as T
         if (c === 'connect') return { ...ok, data: { user_code: 'ABCD-1234', cuenta: 'la del bot', bot_login: 'alex_bot' } } as T
         return ok as T
       }

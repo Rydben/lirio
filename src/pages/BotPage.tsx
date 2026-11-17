@@ -5,6 +5,7 @@ import { ApprovalCard, useSignedDecision } from '../components/Approvals'
 import { Insights } from '../components/Insights'
 import { SettingsForm } from '../components/SettingsForm'
 import { TwitchConnect } from '../components/TwitchConnect'
+import { VoiceCommandTester } from '../components/VoiceCommandTester'
 import { VoiceRecorder } from '../components/VoiceRecorder'
 import { HoldButton } from '../components/HoldButton'
 import { Icon, Pill, ProgressBar, timeAgo, useToast } from '../components/ui'
@@ -28,7 +29,7 @@ function useCapabilities(bot: BotView | undefined) {
     if (!bot || bot.parent) return
     let alive = true
     Promise.all([api.runWith(bot.id, 'voz-texto').catch(() => null), api.runWith(bot.id, 'ajustes-esquema').catch(() => null)])
-      .then(([v, a]) => { if (alive) setCaps({ voz: !!v?.ok, ajustes: !!a?.ok }) })
+      .then(([v, a]) => { if (alive) setCaps({ voz: !!v?.ok || bot.commands.includes('enroll'), ajustes: !!a?.ok }) })
     return () => { alive = false }
   }, [bot?.id])
   return caps
@@ -94,6 +95,9 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
               <VoiceRecorder botId={bot.id} command={bot.commands.includes('enroll') ? 'enroll' : 'registrar-voz'} /></section>
             {bot.commands.includes('enroll') && (
               <section className="panel"><h3>Voz de un amigo</h3><VoiceRecorder botId={bot.id} command="enroll" friend /></section>
+            )}
+            {bot.commands.includes('enroll') && (
+              <section className="panel"><h3>Probar comandos de voz</h3><VoiceCommandTester botId={bot.id} /></section>
             )}
           </div>
         )}

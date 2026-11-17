@@ -16,6 +16,14 @@ const TEMA: Record<string, { titulo: string; cara: Expression }> = {
   subida: { titulo: 'Cuándo subir', cara: 'feliz' },
   frecuencia: { titulo: 'Cada cuánto', cara: 'ojos_cerrados' },
   edicion: { titulo: 'Qué cambiar en la edición', cara: 'sorprendido' },
+  comunidad: { titulo: 'Tu comunidad', cara: 'feliz' },
+}
+
+/** Media de una lista de mensajes por minuto (el editor da la serie completa). */
+export const average = (v: unknown): number | null => {
+  if (typeof v === 'number') return v
+  if (!Array.isArray(v) || !v.length) return null
+  return Math.round(v.reduce((a: number, b: number) => a + Number(b || 0), 0) / v.length)
 }
 
 export const fmtDur = (s?: number | null) => {
@@ -114,7 +122,7 @@ export function Insights({ botId }: { botId: string }) {
                 <div>
                   <div className="tip__head"><b>{t.titulo}</b>
                     <Pill tone={c.confianza === 'alta' ? 'ok' : c.confianza === 'media' ? 'working' : 'muted'}>confianza {c.confianza}</Pill>
-                    <span className="muted small">según {c.base === 'ambos' ? 'tus datos y la investigación' : c.base === 'datos' ? 'tus datos' : 'la investigación'}</span>
+                    <span className="muted small">según {c.base === 'ambos' ? 'tus datos y la investigación' : c.base?.startsWith('datos') ? 'tus datos' : 'la investigación'}</span>
                   </div>
                   <p>{c.texto}</p>
                   {c.fuentes?.length > 0 && <details className="small muted"><summary>Fuentes</summary><ul className="bullets">{c.fuentes.map((f: string) => <li key={f}>{f}</li>)}</ul></details>}
@@ -133,7 +141,7 @@ export function Insights({ botId }: { botId: string }) {
               <div className="stat-row">
                 <Stat label="Duración" value={fmtDur(last.duracion_s)} />
                 <Stat label="Vistas del VOD" value={last.vistas_vod ?? '—'} />
-                <Stat label="Chat por minuto" value={last.chat_por_minuto ?? '—'} />
+                <Stat label="Mensajes por minuto (media)" value={average(last.chat_por_minuto) ?? '—'} />
               </div>
               {last.juegos?.length > 0 && <p className="muted small">Juegos: {last.juegos.map((g: any) => g.nombre ?? g).filter(Boolean).join(', ')}</p>}
               {last.moderador && (
@@ -185,6 +193,15 @@ export function Insights({ botId }: { botId: string }) {
         </div>
       )}
 
+      {tab === 'comentarios' && (data.limitaciones ?? []).some((l: string) => l.includes('comentarios')) && (
+        <section className="panel row">
+          <span className="muted">Para leer los comentarios de tus vídeos, YouTube pide un permiso extra (solo lectura).</span>
+          <button className="btn btn--outline" onClick={async () => {
+            const r = await api.runWith(botId, 'auth', { '--comentarios': true })
+            if (r.ok) load(true)
+          }}><Icon name="key" size={16} /> Dar permiso</button>
+        </section>
+      )}
       {tab === 'comentarios' && (
         <div className="grid-3">
           {([['peticiones', 'Lo que te piden'], ['gusta', 'Lo que gusta'], ['quejas', 'Quejas']] as [string, string][]).map(([k, l]) => (

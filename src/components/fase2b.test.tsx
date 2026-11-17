@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { Bars, fmtDur } from './Insights'
+import { average, Bars, fmtDur } from './Insights'
 import { changedValues, fieldError, SettingsForm } from './SettingsForm'
 import { TwitchConnect } from './TwitchConnect'
 import { ToastProvider } from './ui'
+import { VoiceCommandTester } from './VoiceCommandTester'
 import { VoiceRecorder } from './VoiceRecorder'
 
 const wrap = (ui: React.ReactNode) => render(<ToastProvider>{ui}</ToastProvider>)
@@ -47,6 +48,16 @@ describe('huella de voz', () => {
   })
 })
 
+describe('probar comandos de voz', () => {
+  it('dice qué haría sin ejecutarlo', async () => {
+    wrap(<VoiceCommandTester botId="twitch-moderator" />)
+    fireEvent.change(screen.getByLabelText('Frase de prueba'), { target: { value: 'lirio pon el modo lento' } })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Probar' })) })
+    expect(await screen.findByText(/Activar el modo lento/)).toBeInTheDocument()
+    expect(screen.getByText(/No se ejecuta nada/)).toBeInTheDocument()
+  })
+})
+
 describe('conectar Twitch', () => {
   it('muestra el código y confirma la conexión', async () => {
     wrap(<TwitchConnect botId="twitch-moderator" />)
@@ -56,6 +67,11 @@ describe('conectar Twitch', () => {
 })
 
 describe('estadísticas', () => {
+  it('media de mensajes por minuto', () => {
+    expect(average([10, 20, 30])).toBe(20)
+    expect(average(12)).toBe(12)
+    expect(average(null)).toBeNull()
+  })
   it('formatea duraciones', () => {
     expect(fmtDur(3900)).toBe('1 h 5 min')
     expect(fmtDur(600)).toBe('10 min')

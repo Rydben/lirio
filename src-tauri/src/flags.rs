@@ -17,11 +17,16 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("voz-dispositivos", &[]),
     ("ajustes-esquema", &[]),
     ("ajustes", &[]),
-    ("connect", &[("--iniciar", Kind::Flag), ("--esperar", Kind::Flag), ("--streamer", Kind::Flag)]),
+    ("connect", &[("--iniciar", Kind::Flag), ("--esperar", Kind::Flag), ("--streamer", Kind::Flag), ("--encuestas", Kind::Flag)]),
+    // prueba los comandos de voz SIN ejecutar nada (solo dice qué entendería)
+    ("probar-voz", &[("--segundos", Kind::Int(3, 15)), ("--texto", Kind::Text)]),
+    ("ultimo-directo", &[]),
     ("enroll", &[("--segundos", Kind::Int(10, 120)), ("--nombre", Kind::Text), ("--desde-pc", Kind::Flag),
                  ("--dispositivo", Kind::Text)]),
     ("registrar-voz", &[("--segundos", Kind::Int(10, 120)), ("--dispositivo", Kind::Text), ("--desde-lirio", Kind::Flag)]),
     ("estadisticas", &[("--refrescar", Kind::Flag), ("--sin-ia", Kind::Flag)]),
+    // permiso extra de solo lectura para leer los comentarios de tus vídeos (abre el navegador de Google)
+    ("auth", &[("--comentarios", Kind::Flag)]),
 ];
 
 pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<String>, String> {
