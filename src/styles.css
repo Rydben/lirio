@@ -395,3 +395,10 @@ label.chip { cursor: pointer; }
 .chart g:hover .chart__bar { fill: #22d3ee; }
 .chart__tip { position: absolute; top: 4px; transform: translateX(-50%); padding: 6px 10px; border-radius: 8px; pointer-events: none;
   background: var(--panel-2); border: 1px solid var(--line-2); font-size: .85rem; white-space: nowrap; }
+
+/* cajas de texto sueltas (fuera de formularios) con el mismo aspecto que el resto */
+input.input {
+  height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--bg-2); color: var(--text); font: inherit; min-width: 0; flex: 1;
+}
+input.input:focus, select.input:focus { border-color: var(--cyan); outline: none; }
