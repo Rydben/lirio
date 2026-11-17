@@ -151,6 +151,10 @@ export function Insights({ botId }: { botId: string }) {
                   <Stat label="Subs" value={last.moderador.subs ?? '—'} />
                 </div>
               )}
+              {last.moderador?.eventos_conectados === false && (
+                <p className="muted small"><Icon name="key" size={14} /> Para ver seguidores, subs y bits, conecta tu canal en el
+                  bot moderador (pestaña <b>Twitch</b> → «Conectar mi canal»).</p>
+              )}
             </section>
             <section className="panel">
               <h3>Vistas de tus últimos directos</h3>
