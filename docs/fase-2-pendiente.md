@@ -19,10 +19,9 @@
 - Código de Lirio revisado con el detector (99 archivos limpios) y guardado en git local.
 
 ## Falta
-1. **GitHub**: iniciar sesión en `gh` (lo hace el usuario con un código), crear el repositorio público `lirio`, subir el
-   código y publicar la v0.2.0 con su PUBLICAR.
-2. **Prueba en otra cuenta de Windows** (elegida por el usuario): crear una cuenta local nueva, instalar Lirio desde el
-   instalador publicado y los bots grandes.
+1. ~~GitHub~~: hecho. Repositorio público de Lirio en GitHub y versión 0.2.0 publicada (7 archivos,
+   comprobados idénticos a los aprobados).
+2. **Prueba en otra cuenta de Windows**: guía paso a paso en [prueba-cuenta-nueva.md](prueba-cuenta-nueva.md).
 3. **Moderador**: huella de voz sin consola (`voz-texto`, `voz-dispositivos`, `enroll --json`), ajustes por esquema y
    decidir el `client_id` de Twitch para los amigos; luego, la UI de responder en el chat y de comandos de voz.
 4. Claude del amigo: la primera vez hay que abrir Claude Code para iniciar sesión (opcional: no hace falta Claude).
