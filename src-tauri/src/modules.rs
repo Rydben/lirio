@@ -177,8 +177,9 @@ impl Module {
             state = "files_missing".into();
             note = Some("faltan archivos del bot: puede que el antivirus los haya puesto en cuarentena");
         }
-        let approvals = read_json(&self.approvals_path());
-        let pending: Vec<Value> = pending_list(&approvals);
+        // Un sub-bot (miniaturas) comparte el estado de su bot principal: sus solicitudes ya salen en el principal,
+        // que es quien las aprueba. Aquí no se repiten.
+        let pending: Vec<Value> = if self.is_sub_bot() { vec![] } else { pending_list(&read_json(&self.approvals_path())) };
         let stop_active = !self.is_sub_bot() && self.kill_switch_path().exists();
         let stop_requested = self.state_file("stop.flag").exists();
         json!({
@@ -417,9 +418,12 @@ mod tests {
             "entrypoint": {"python": "../../../.venv/Scripts/python.exe", "module": "pkg.bots.thumb", "cwd": "../../.."},
             "commands": {"run": {"argv": ["<out_dir>"]}}
         }));
+        // el editor tiene una solicitud pendiente en el estado que comparten: sale en el editor, no en el sub-bot
+        write(&d.path().join("state/approvals.json"), &json!([{"id": "28ae4db4", "action": "files.delete_por_usuario", "status": "pending"}]));
         let m = Module::load(&ModuleEntry { ruta: sub, tarea: None }).unwrap();
         assert_eq!(m.cwd(), d.path());
         assert_eq!(m.view()["state"], "on_demand");
+        assert_eq!(m.view()["approvals_pending"], json!([]), "sin duplicados en el bot de miniaturas");
     }
 
     #[test]

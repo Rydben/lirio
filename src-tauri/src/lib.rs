@@ -331,8 +331,10 @@ fn check_pinned(m: &Module, mine: &approver::PublicKeyInfo) -> Result<(), String
     if pinned["llave_publica"].as_str() != Some(mine.llave_publica.as_str()) {
         return Err(format!(
             "La llave de este Lirio ({}) no es la que tiene fijada {} ({}). No firmo, porque el bot la rechazaría. \
+             Este Lirio usa la carpeta de datos {} y el programa {}. \
              Si se perdió la llave o cambiaste de PC, fija la nueva a mano en su wall_rules.json (la tienes en Configuración).",
-            mine.id, m.name(), pinned["id"].as_str().unwrap_or("?")));
+            mine.id, m.name(), pinned["id"].as_str().unwrap_or("?"), data_dir().display(),
+            std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default()));
     }
     Ok(())
 }
