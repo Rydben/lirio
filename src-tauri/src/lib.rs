@@ -12,6 +12,7 @@ pub mod fetch;
 mod ollama;
 mod flags;
 pub mod installer;
+mod jobs;
 mod journal;
 mod modules;
 mod upload;
@@ -397,10 +398,14 @@ async fn run_with(state: State<'_, AppState>, id: String, command: String, flags
     if matches!(command.as_str(), "enroll" | "registrar-voz") {
         return Err("la grabación tiene su propio botón".into());
     }
+    if jobs::LONG.contains(&command.as_str()) {
+        return Err("esto tarda: se lanza como trabajo en segundo plano".into());
+    }
     let m = state.module(&id)?;
-    let mut cmd = cli::build_command_with_flags(&m, &command, &flags)?;
-    let out = tauri::async_runtime::spawn_blocking(move || cmd.output()).await.map_err(|e| e.to_string())?
-        .map_err(|e| format!("no se pudo lanzar: {e}"))?;
+    let cmd = cli::build_command_with_flags(&m, &command, &flags)?;
+    // Nunca se espera sin límite: conectar Twitch espera al navegador (10 min); lo demás, 3 min como mucho
+    let limit = std::time::Duration::from_secs(if matches!(command.as_str(), "connect" | "estadisticas") { 600 } else { 180 });
+    let out = tauri::async_runtime::spawn_blocking(move || jobs::output_with_timeout(cmd, limit)).await.map_err(|e| e.to_string())??;
     let r = cli::interpret(out.status.code().unwrap_or(-1), &out.stdout, &out.stderr);
     if command == "connect" && flags.get("--esperar").and_then(Value::as_bool) == Some(true) {
         state.journal.add("twitch", Some(&m.id), &format!("{}: conectar Twitch {}", m.name(), if r.ok { "hecho" } else { "no terminado" }), r.ok);
@@ -726,7 +731,8 @@ pub fn run() {
             wizard::install_status, wizard::wizard_get, wizard::wizard_save, wizard::wizard_clear, wizard::ai_status, wizard::test_claude,
             wizard::ollama_pull, wizard::ollama_setup, wizard::install_client_secret, wizard::gpu_status, wizard::install_gpu, release_info, check_update, install_update,
             journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions,
-            help_paths, last_session, open_bot_folder, thumbnails, signed_approve_deletes
+            help_paths, last_session, open_bot_folder, thumbnails, signed_approve_deletes,
+            jobs::job_start, jobs::jobs_status, jobs::job_cancel
         ])
         .build(tauri::generate_context!())
         .expect("error al arrancar Lirio")

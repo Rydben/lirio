@@ -1,5 +1,6 @@
 // El humor del avatar refleja el estado real del sistema.
 import type { BotView } from './api'
+import { stalledInput } from './progress'
 
 export type Expression =
   | 'feliz' | 'ojos_cerrados' | 'sorprendido' | 'enojado' | 'triste' | 'guino' | 'boca_abierta' | 'confundido'
@@ -43,6 +44,12 @@ export function moodFor(bots: BotView[], uploading = false): Mood {
   if (stalled.length) {
     return { expression: 'confundido', level: 'warning', title: 'Un bot no responde',
       detail: `${names(stalled)} sigue abierto pero no da señales. Prueba Parar y Arrancar.` }
+  }
+  const idle = main.filter((b) => stalledInput(b))
+  if (idle.length) {
+    const st = stalledInput(idle[0])!
+    return { expression: 'confundido', level: 'warning', title: 'El editor no avanza',
+      detail: `${names(idle)} tiene un directo descargado desde las ${st.desde} sin editar. Míralo en su página.` }
   }
   const warned = main.filter((b) => b.status?.warning)
   if (warned.length) {

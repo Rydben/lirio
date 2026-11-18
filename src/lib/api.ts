@@ -108,6 +108,11 @@ export interface UploadEvent {
   result?: CliResult
 }
 
+export interface JobEvent {
+  clave: string; bot: string; comando: string; percent?: number | null; etapa?: string
+  hecho: boolean; ok?: boolean; cancelado?: boolean; resultado?: any; mensaje?: string
+}
+
 export interface WizardProgress { paso: string; ids: string[]; respuestas: Answers }
 
 export interface CatalogBot {
@@ -230,6 +235,11 @@ export const api = {
   wizardGet: () => call<WizardProgress | null>('wizard_get'),
   wizardSave: (progreso: WizardProgress) => call<void>('wizard_save', { progreso }),
   wizardClear: () => call<void>('wizard_clear'),
+  jobStart: (id: string, command: string, flags: Record<string, unknown>) => call<string>('job_start', { id, command, flags }),
+  jobsStatus: () => call<Record<string, JobEvent>>('jobs_status'),
+  jobCancel: (clave: string) => call<boolean>('job_cancel', { clave }),
+  onJob: (cb: (e: JobEvent) => void): Promise<UnlistenFn> =>
+    inTauri() ? listen<JobEvent>('lirio://trabajo', (e) => cb(e.payload)) : demo.on('trabajo', cb),
   thumbnails: (id: string) => call<CliResult>('thumbnails', { id }),
   openBotFolder: (id: string, ruta: string) => call<void>('open_bot_folder', { id, ruta }),
   pickFile: (title: string, kind: 'video' | 'miniatura') =>

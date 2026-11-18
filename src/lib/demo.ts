@@ -155,6 +155,15 @@ export const demo = {
         puede_regenerar: true, miniaturas: [{ archivo: 'v1_miniatura_1.jpg', ruta: 'C:\\o\\v1\\v1_miniatura_1.jpg', puntuacion: 8.2, elegida: true, img: null },
           { archivo: 'v1_miniatura_2.jpg', ruta: 'C:\\o\\v1\\v1_miniatura_2.jpg', puntuacion: 7.1, elegida: false, img: null }] }] } } as T
       case 'open_bot_folder': return undefined as T
+      case 'job_start': {
+        const clave = `${args?.id}:${args?.command}`
+        const base = { clave, bot: args?.id, comando: args?.command }
+        fire('trabajo', [{ ...base, percent: 20, etapa: 'Analizando cortes', hecho: false }, { ...base, percent: 80, etapa: 'Analizando cortes', hecho: false },
+          { ...base, percent: 100, hecho: true, ok: true, resultado: { ok: true, instrucciones: [], video_referencia: 'C:\\Videos\\referencia.mp4' } }])
+        return clave as T
+      }
+      case 'jobs_status': return {} as T
+      case 'job_cancel': return true as T
       case 'signed_approve_deletes': return ok as T
       case 'help_paths': return { programa: 'C:\\Users\\Ana\\AppData\\Local\\Lirio', datos: 'C:\\Users\\Ana\\AppData\\Local\\LirioDatos' } as T
       case 'last_session': return { cerrado_de_golpe: false } as T

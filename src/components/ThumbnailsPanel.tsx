@@ -2,6 +2,8 @@
 // Los comandos son del editor (`miniaturas`, `miniatura-elegir`, `miniaturas-generar`): botId es el del editor.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useJob } from '../lib/jobs'
+import { JobProgress } from './JobProgress'
 import { Icon, Pill, useToast } from './ui'
 
 interface Thumb { archivo: string; ruta: string; texto?: string; tipo?: string; puntuacion?: number; elegida?: boolean; img?: string | null }
@@ -28,14 +30,13 @@ export function ThumbnailsPanel({ botId }: { botId: string }) {
     load()
   }
 
-  const regenerate = async (v: Video) => {
-    setBusy(v.video)
-    toast('info', 'Haciendo miniaturas nuevas… puede tardar un poco.')
-    const r = await api.runWith(botId, 'miniaturas-generar', { '@video': v.video })
-    setBusy(null)
-    toast(r.ok ? 'ok' : 'error', r.ok ? 'Miniaturas nuevas listas.' : r.data?.error ?? r.message)
+  // Hacer miniaturas nuevas tarda varios minutos: en segundo plano, una cada vez
+  const [regenFor, setRegenFor] = useState<string | null>(null)
+  const regen = useJob(botId, 'miniaturas-generar', (e) => {
+    toast(e.ok ? 'ok' : e.cancelado ? 'info' : 'error', e.ok ? 'Miniaturas nuevas listas.' : e.cancelado ? 'Cancelado.' : e.resultado?.error ?? e.mensaje ?? 'No se pudo')
     load()
-  }
+  })
+  const regenerate = (v: Video) => { setRegenFor(v.video); regen.start({ '@video': v.video }) }
 
   if (err) return <p className="panel warn">{err}</p>
   if (!videos) return <p className="panel muted">Cargando…</p>
@@ -48,11 +49,12 @@ export function ThumbnailsPanel({ botId }: { botId: string }) {
           <div className="section-head">
             <h3><Icon name="image" size={18} /> {v.titulo || v.video}</h3>
             {v.puede_regenerar && (
-              <button className="btn btn--ghost" disabled={busy !== null} onClick={() => regenerate(v)}>
-                <Icon name="refresh" size={16} /> {busy === v.video ? 'Generando…' : 'Hacer otras'}
+              <button className="btn btn--ghost" disabled={busy !== null || regen.running} onClick={() => regenerate(v)}>
+                <Icon name="refresh" size={16} /> {regen.running && regenFor === v.video ? 'Generando…' : 'Hacer otras'}
               </button>
             )}
           </div>
+          {regenFor === v.video && <JobProgress job={regen.job} label="Haciendo miniaturas" onCancel={regen.cancel} />}
           <div className="thumbs">
             {v.miniaturas.map((t) => (
               <figure key={t.ruta} className={`thumb${t.elegida ? ' is-chosen' : ''}`}>

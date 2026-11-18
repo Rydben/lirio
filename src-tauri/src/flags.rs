@@ -57,6 +57,8 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("estilo-borrar", &[("@que", Kind::Text)]),
     ("estilo-video", &[("@archivo", Kind::Path)]),
     ("estilo-miniatura", &[("@archivo", Kind::Path)]),
+    // Poner a editar ya un directo descargado (trabajo largo; el avance sale en status.json)
+    ("editar-ahora", &[("@ruta", Kind::Path)]),
 ];
 
 pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<String>, String> {

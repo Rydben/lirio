@@ -5,6 +5,7 @@ import { ApprovalCard, useSignedDecision } from '../components/Approvals'
 import { ChatPanel } from '../components/ChatPanel'
 import { GpuPanel } from '../components/GpuPanel'
 import { InstallPanel } from '../components/InstallProgress'
+import { jobDetail, stageName, stalledInput } from '../lib/progress'
 import { StylePanel } from '../components/StylePanel'
 import { ThumbnailsPanel } from '../components/ThumbnailsPanel'
 import { TrashPanel } from '../components/TrashPanel'
@@ -233,11 +234,17 @@ function Summary({ bot, details }: { bot: BotView; details: Details | null }) {
         <h3>Ahora mismo</h3>
         {job ? (
           <>
-            <p>Editando <b>{fileName(job.source)}</b> — etapa {job.stage} ({job.stage_index}/{job.stages_total})</p>
-            <ProgressBar percent={job.percent ?? 0} label="Edición" />
+            <p><b>{stageName(job.stage)}</b>{job.source ? <> · {fileName(job.source)}</> : null}
+              {job.stage_index && job.stages_total ? <span className="muted"> (paso {job.stage_index} de {job.stages_total})</span> : null}</p>
+            <ProgressBar percent={job.percent ?? 0} label={stageName(job.stage)} />
+            {jobDetail(job) && <p className="muted small">{jobDetail(job)}</p>}
           </>
         ) : <p className="muted">{botSummary(bot)}</p>}
         {s.warning && <p className="warn"><Icon name="alert" size={16} /> {String(s.warning)}</p>}
+        {stalledInput(bot) && (
+          <p className="warn"><Icon name="alert" size={16} /> Hay un directo descargado desde las {stalledInput(bot)!.desde} y el editor no lo
+            está editando. Puedes ponerlo a editar en la pestaña <b>Papelera</b> → «Editar ahora».</p>
+        )}
         {s.last_error && <p className="error-text"><Icon name="alert" size={16} /> {String(s.last_error)}</p>}
         {bot.id === 'twitch-moderator' && s.moderation && (
           <dl className="kv">

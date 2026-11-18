@@ -3,6 +3,8 @@
 // Ninguna IA borra sola. El borrado automático se cambia en Ajustes (y aun así el editor pide aprobación).
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { useJob } from '../lib/jobs'
+import { JobProgress } from './JobProgress'
 import { HoldButton } from './HoldButton'
 import { Icon, Pill, timeAgo, useToast } from './ui'
 import { human } from './units'
@@ -22,6 +24,12 @@ export function TrashPanel({ botId, goSettings }: { botId: string; goSettings?: 
   const toast = useToast()
   const [t, setT] = useState<Trash | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const edit = useJob(botId, 'editar-ahora', (e) => {
+    if (e.ok) toast('ok', e.resultado?.mensaje ?? 'Editando: lo verás en Resumen.')
+    else if (!e.cancelado) toast('error', e.resultado?.error ?? e.mensaje ?? 'No se pudo')
+    load()
+  })
 
   const load = useCallback(() => {
     api.runWith(botId, 'papelera').then((r) => {
@@ -92,7 +100,16 @@ export function TrashPanel({ botId, goSettings }: { botId: string; goSettings?: 
                     <div className="cell-title">{d.archivo} {d.estado && <Pill tone={d.se_puede_borrar ? 'ok' : 'muted'}>{ESTADO[d.estado] ?? d.estado}</Pill>}</div>
                     <div className="muted small">{human(d.mb * 1e6)}{d.fecha ? ` · ${timeAgo(d.fecha)}` : ''}{d.aviso ? ` · ${d.aviso}` : ''}</div>
                   </div>
-                  {hold(d.ruta, d.archivo, d.estado === 'editando')}
+                  <div className="row">
+                    {(d.estado === 'pendiente' || d.estado === 'en_espera') && (
+                      <button className="btn btn--primary" disabled={edit.running}
+                        onClick={() => { setEditing(d.ruta); edit.start({ '@ruta': d.ruta }) }}>
+                        <Icon name="play" size={16} /> {edit.running && editing === d.ruta ? 'Editando…' : 'Editar ahora'}
+                      </button>
+                    )}
+                    {hold(d.ruta, d.archivo, d.estado === 'editando')}
+                  </div>
+                  {editing === d.ruta && <JobProgress job={edit.job} label="Editando" onCancel={edit.cancel} />}
                 </li>
               ))}
             </ul>

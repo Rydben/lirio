@@ -2,6 +2,8 @@
 // miniatura para el bot de miniaturas). Todo se guarda en el editor como preferencias (sin IA ni coste).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
+import { useJob } from '../lib/jobs'
+import { JobProgress } from './JobProgress'
 import { Icon, useToast } from './ui'
 
 interface Msg { de: 'tu' | 'bot'; texto: string; cambios?: string[] }
@@ -16,6 +18,11 @@ export function StylePanel({ botId, kind }: { botId: string; kind: 'video' | 'mi
   const [sending, setSending] = useState(false)
   const [estilo, setEstilo] = useState<Estilo | null>(null)
   const end = useRef<HTMLDivElement>(null)
+  const refCommand = kind === 'video' ? 'estilo-video' : 'estilo-miniatura'
+  const analysis = useJob(botId, refCommand, (e) => {
+    if (e.ok) { toast('ok', 'Referencia guardada: los próximos se parecerán.'); apply(e.resultado) }
+    else if (!e.cancelado) toast('error', e.resultado?.error ?? e.mensaje ?? 'No se pudo')
+  })
 
   const apply = (d: any) => { if (d?.instrucciones) setEstilo(d as Estilo) }
   const load = useCallback(() => api.runWith(botId, 'estilo').then((r) => apply(r.data)).catch(() => {}), [botId])
@@ -44,9 +51,8 @@ export function StylePanel({ botId, kind }: { botId: string; kind: 'video' | 'mi
   const pickReference = async () => {
     const path = await api.pickFile(kind === 'video' ? 'Elige un vídeo de referencia' : 'Elige una miniatura de referencia', kind)
     if (!path) return
-    const r = await api.runWith(botId, kind === 'video' ? 'estilo-video' : 'estilo-miniatura', { '@archivo': path })
-    toast(r.ok ? 'ok' : 'error', r.ok ? 'Referencia guardada: los próximos se parecerán.' : r.data?.error ?? r.message)
-    apply(r.data)
+    // analizar un vídeo largo tarda: va en segundo plano, con su barra, y no se puede lanzar dos veces
+    analysis.start({ '@archivo': path })
   }
 
   const ref = kind === 'video' ? estilo?.video_referencia : estilo?.miniatura_referencia
@@ -88,7 +94,10 @@ export function StylePanel({ botId, kind }: { botId: string; kind: 'video' | 'mi
             <button className="btn btn--ghost" onClick={() => forget(kind === 'video' ? 'video' : 'miniatura')}>Quitar</button>
           </div>
         )}
-        <button className="btn btn--outline" onClick={pickReference}><Icon name="upload" size={16} /> {ref ? 'Cambiar archivo…' : 'Elegir archivo…'}</button>
+        <JobProgress job={analysis.job} label="Analizando la referencia" onCancel={analysis.cancel} />
+        <button className="btn btn--outline" disabled={analysis.running} onClick={pickReference}>
+          <Icon name="upload" size={16} /> {analysis.running ? 'Analizando…' : ref ? 'Cambiar archivo…' : 'Elegir archivo…'}
+        </button>
         <h3 style={{ marginTop: 18 }}>Lo que ya sabe de tu estilo</h3>
         {!estilo || estilo.instrucciones.length === 0 ? <p className="muted small">Todavía nada.</p> : (
           <ul className="list">

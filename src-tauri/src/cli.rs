@@ -58,7 +58,7 @@ fn command_for(m: &Module, command: &str, args: &[String]) -> Result<Command, St
                                    // miniaturas, papelera y estilo del editor (no están en su manifiesto, que es protegido)
                                    | "miniaturas" | "miniatura-elegir" | "miniaturas-generar" | "papelera" | "carpetas"
                                    | "papelera-borrar" | "estilo" | "estilo-chat" | "estilo-instruccion" | "estilo-borrar"
-                                   | "estilo-video" | "estilo-miniatura");
+                                   | "estilo-video" | "estilo-miniatura" | "editar-ahora");
     if !m.has_command(command) && !common {
         return Err(format!("{} no tiene el comando '{command}'", m.name()));
     }

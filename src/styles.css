@@ -439,3 +439,7 @@ input.input:focus, select.input:focus { border-color: var(--cyan); outline: none
 .install-row { display: flex; flex-direction: column; gap: 6px; }
 .install-row__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; }
 .install-row__head .cell-title { display: flex; align-items: center; gap: 6px; }
+
+.job { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.job__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.list li { flex-wrap: wrap; }
