@@ -312,17 +312,14 @@ pub fn pip_wheel_from_pypi(meta: &Value) -> Result<(String, String), String> {
 /// Si el paso 1 falla (pip antiguo, sin red al índice…), se usa pip normal como antes.
 pub fn install_requirements(python: &Path, dir: &Path, req: &Path, wheels: &Path, paso: &str,
                             say: &mut dyn FnMut(&str, String, Option<u8>)) -> Result<(), String> {
+    say(paso, "Preparando las herramientas de construcción…".into(), None);
+    ensure_build_tools(python, dir)?;
     say(paso, "Calculando qué librerías hacen falta…".into(), None);
     std::fs::create_dir_all(wheels).map_err(|x| x.to_string())?;
-    let report = wheels.join("plan.json");
-    let mut c = Command::new(python);
-    c.current_dir(dir).args(["-m", "pip", "install", "--dry-run", "--quiet", "--disable-pip-version-check", "--report"])
-        .arg(&report).arg("-r").arg(req);
-    let plan = run_streaming(c, |_| {}).ok()
-        .and_then(|_| std::fs::read_to_string(&report).ok())
-        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-        .and_then(|v| crate::fetch::items_from_pip_report(&v, wheels).ok());
-    let base_args = ["-m", "pip", "install", "--no-warn-script-location", "--disable-pip-version-check"];
+    let plan = pip_plan(python, dir, req, wheels, None);
+    // --no-build-isolation: el Python embebido ignora las rutas que pip usa para construir en un entorno aparte
+    // («Cannot import setuptools.build_meta»); se construye con el setuptools ya instalado en el propio bot.
+    let base_args = ["-m", "pip", "install", "--no-warn-script-location", "--disable-pip-version-check", "--no-build-isolation"];
     match plan {
         Some(items) if items.is_empty() => { say(paso, "Las librerías ya estaban".into(), Some(100)); }
         Some(items) => {
@@ -338,26 +335,85 @@ pub fn install_requirements(python: &Path, dir: &Path, req: &Path, wheels: &Path
             for (i, sd) in sdists.iter().enumerate() {
                 let name = sd.file_name().unwrap_or_default().to_string_lossy().to_string();
                 say(paso, format!("Preparando {name} ({} de {})", i + 1, sdists.len()), None);
+                let before = wheel_count(wheels);
                 let mut c = Command::new(python);
-                c.current_dir(dir).args(["-m", "pip", "wheel", "--no-deps", "--disable-pip-version-check", "-w"])
+                c.current_dir(dir).args(["-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--disable-pip-version-check", "-w"])
                     .arg(wheels).arg(sd);
-                run_streaming(c, |_| {})?;
+                // pip a veces se cae AL CERRARSE cuando no tiene ventana; vale si dejó la rueda hecha
+                if let Err(e) = run_streaming(c, |_| {}) {
+                    if e == CANCELLED || wheel_count(wheels) <= before { return Err(e); }
+                }
                 let _ = std::fs::remove_file(sd);
             }
             say(paso, "Instalando las librerías (sin internet, desde lo descargado)…".into(), None);
             let mut c = Command::new(python);
             c.current_dir(dir).args(base_args).arg("--no-index").arg("--find-links").arg(wheels).arg("-r").arg(req);
-            run_streaming(c, |line| if let Some(s) = pip_line_summary(line) { say(paso, s, None) })?;
+            let r = run_streaming(c, |line| if let Some(s) = pip_line_summary(line) { say(paso, s, None) });
+            confirm_installed(r, python, dir, req, wheels, Some(wheels), paso, say)?;
         }
         None => {
             say(paso, "Instalando librerías con pip (puede tardar varios minutos)".into(), None);
             let mut c = Command::new(python);
             c.current_dir(dir).args(base_args).arg("-r").arg(req);
-            run_streaming(c, |line| if let Some(s) = pip_line_summary(line) { say(paso, s, None) })?;
+            let r = run_streaming(c, |line| if let Some(s) = pip_line_summary(line) { say(paso, s, None) });
+            confirm_installed(r, python, dir, req, wheels, None, paso, say)?;
         }
     }
     let _ = std::fs::remove_dir_all(wheels);
     Ok(())
+}
+
+/// setuptools y wheel dentro del Python del bot (para construir los paquetes que solo vienen como código fuente).
+fn ensure_build_tools(python: &Path, dir: &Path) -> Result<(), String> {
+    let has = || {
+        let mut c = Command::new(python);
+        c.current_dir(dir).args(["-c", "import setuptools, wheel"]).stdout(Stdio::null()).stderr(Stdio::null());
+        winutil::hidden(&mut c);
+        c.status().is_ok_and(|s| s.success())
+    };
+    if has() { return Ok(()); }
+    let mut c = Command::new(python);
+    c.current_dir(dir).args(["-m", "pip", "install", "--no-warn-script-location", "--disable-pip-version-check", "setuptools", "wheel"]);
+    let r = run_streaming(c, |_| {});
+    if matches!(&r, Err(e) if e == CANCELLED) { return r; }
+    // pip puede caerse al cerrarse sin ventana: vale si quedaron instalados
+    if has() { Ok(()) } else { r.and(Err("no se pudo preparar setuptools".into())) }
+}
+
+fn wheel_count(d: &Path) -> usize {
+    std::fs::read_dir(d).into_iter().flatten().flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "whl")).count()
+}
+
+/// Lo que pip instalaría (`--dry-run --report`, sin descargar los paquetes grandes). `find_links`: solo desde esa
+/// carpeta, sin internet. Se usa el informe aunque pip se caiga al cerrarse, si llegó a escribirlo entero.
+fn pip_plan(python: &Path, dir: &Path, req: &Path, wheels: &Path, find_links: Option<&Path>) -> Option<Vec<crate::fetch::Item>> {
+    let report = wheels.join("plan.json");
+    let _ = std::fs::remove_file(&report);
+    let mut c = Command::new(python);
+    c.current_dir(dir).args(["-m", "pip", "install", "--dry-run", "--quiet", "--disable-pip-version-check", "--no-build-isolation"]);
+    if let Some(fl) = find_links { c.arg("--no-index").arg("--find-links").arg(fl); }
+    c.arg("--report").arg(&report).arg("-r").arg(req);
+    let ran = run_streaming(c, |_| {});
+    if matches!(&ran, Err(e) if e == CANCELLED) { return None; }
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&report).ok()?).ok()?;
+    crate::fetch::items_from_pip_report(&v, wheels).ok()
+}
+
+/// pip a veces termina con un fallo de Windows (0xC0000005) AL CERRARSE cuando se lanza sin ventana, después de
+/// haber instalado todo. Si falla, se le vuelve a preguntar qué falta: si no falta nada, la instalación vale.
+#[allow(clippy::too_many_arguments)]
+fn confirm_installed(r: Result<(), String>, python: &Path, dir: &Path, req: &Path, wheels: &Path, find_links: Option<&Path>,
+                     paso: &str, say: &mut dyn FnMut(&str, String, Option<u8>)) -> Result<(), String> {
+    let Err(err) = r else { return Ok(()) };
+    if err == CANCELLED { return Err(err); }
+    say(paso, "Comprobando que todo quedó instalado…".into(), None);
+    match pip_plan(python, dir, req, wheels, find_links) {
+        Some(left) if left.is_empty() => Ok(()),
+        Some(left) => Err(format!("{err}. Faltan {} librerías: {}", left.len(),
+                                  left.iter().take(5).map(|i| i.name.as_str()).collect::<Vec<_>>().join(", "))),
+        None => Err(err),
+    }
 }
 
 /// ¿Paquete de código fuente (hay que construirlo) en vez de rueda ya hecha?
