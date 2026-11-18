@@ -330,6 +330,20 @@ pub fn install_requirements(python: &Path, dir: &Path, req: &Path, wheels: &Path
                 let what = if p.current.is_empty() { String::new() } else { format!(" ({})", p.current) };
                 say(paso, format!("Descargando librerías{what}: {}", p.text()), Some(p.percent()));
             })?;
+            // Los paquetes que solo existen como código fuente (p. ej. `srt`, un .tar.gz) hay que construirlos.
+            // Se hace aquí, con internet (pip trae su herramienta de construcción, setuptools u otra), y se deja
+            // la rueda construida junto a las demás: así la instalación de después sí puede ir sin internet.
+            let sdists: Vec<PathBuf> = std::fs::read_dir(wheels).into_iter().flatten().flatten().map(|e| e.path())
+                .filter(|p| p.is_file() && is_sdist(p)).collect();
+            for (i, sd) in sdists.iter().enumerate() {
+                let name = sd.file_name().unwrap_or_default().to_string_lossy().to_string();
+                say(paso, format!("Preparando {name} ({} de {})", i + 1, sdists.len()), None);
+                let mut c = Command::new(python);
+                c.current_dir(dir).args(["-m", "pip", "wheel", "--no-deps", "--disable-pip-version-check", "-w"])
+                    .arg(wheels).arg(sd);
+                run_streaming(c, |_| {})?;
+                let _ = std::fs::remove_file(sd);
+            }
             say(paso, "Instalando las librerías (sin internet, desde lo descargado)…".into(), None);
             let mut c = Command::new(python);
             c.current_dir(dir).args(base_args).arg("--no-index").arg("--find-links").arg(wheels).arg("-r").arg(req);
@@ -344,6 +358,12 @@ pub fn install_requirements(python: &Path, dir: &Path, req: &Path, wheels: &Path
     }
     let _ = std::fs::remove_dir_all(wheels);
     Ok(())
+}
+
+/// ¿Paquete de código fuente (hay que construirlo) en vez de rueda ya hecha?
+pub fn is_sdist(p: &Path) -> bool {
+    let n = p.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+    n.ends_with(".tar.gz") || n.ends_with(".zip") || n.ends_with(".tar.bz2") || n.ends_with(".tgz")
 }
 
 /// Librerías de la gráfica NVIDIA de un bot (si las declara): ¿hacen falta, ya están?
@@ -598,6 +618,14 @@ mod tests {
     }
 
     #[test]
+    fn source_packages_are_detected() {
+        assert!(is_sdist(Path::new("C:/w/srt-3.5.3.tar.gz")));
+        assert!(is_sdist(Path::new("C:/w/x-1.0.zip")));
+        assert!(!is_sdist(Path::new("C:/w/numpy-2.0-cp312-win_amd64.whl")));
+        assert!(!is_sdist(Path::new("C:/w/plan.json")));
+    }
+
+    #[test]
     fn pip_lines() {
         assert_eq!(pip_line_summary("Collecting numpy>=1.26 (from -r requirements.txt (line 2))").unwrap(), "Preparando numpy");
         assert_eq!(pip_line_summary("  Downloading https://files.pythonhosted.org/x/torch-2.5.1-cp312-win_amd64.whl (203.1 MB)").unwrap(),
@@ -610,5 +638,35 @@ mod tests {
         let meta = json!({"urls": [{"packagetype": "sdist", "url": "s", "digests": {"sha256": "a"}},
                                    {"packagetype": "bdist_wheel", "url": "w", "digests": {"sha256": "b"}}]});
         assert_eq!(pip_wheel_from_pypi(&meta).unwrap(), ("w".into(), "b".into()));
+    }
+}
+
+#[cfg(test)]
+mod pc_nuevo {
+    /// Instalación COMPLETA de los bots del catálogo en un "PC nuevo" simulado (descarga Python, pip y librerías
+    /// de verdad). No corre por defecto:
+    /// LIRIO_E2E_DIST=<dist-publicacion\vX> LIRIO_E2E_DIR=<carpeta vacía> cargo test pc_nuevo -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn full_install_of_every_bot() {
+        let dist = std::path::PathBuf::from(std::env::var("LIRIO_E2E_DIST").expect("LIRIO_E2E_DIST"));
+        let root = std::path::PathBuf::from(std::env::var("LIRIO_E2E_DIR").expect("LIRIO_E2E_DIR"));
+        let cat: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(dist.join("catalogo.json")).unwrap()).unwrap();
+        let bots: Vec<super::CatalogEntry> = serde_json::from_value(cat["bots"].clone()).unwrap();
+        let base = format!("file://{}", dist.display());
+        let answers = serde_json::json!({"nombre": "Prueba", "canal_twitch": "", "nombre_canal": "", "carpeta_obs": "", "ia": "heuristico"});
+        let key = serde_json::json!({"alg": "ed25519", "llave_publica": "mWqreChhlTG9a/LV+SBgohzdIsIa3loNwkd+hY+VBKY=", "id": "lirio-prueba"});
+        for e in bots.iter().filter(|b| b.padre.is_none()) {
+            let t0 = std::time::Instant::now();
+            let job = super::InstallJob { entry: e, base: &base, bots_root: &root.join("bots"), cache: &root.join("descargas"),
+                                          approver_public: key.clone(), answers: &answers };
+            let mut last = String::new();
+            let dir = super::install_bot(&job, &mut |s| {
+                let line = format!("{} [{}] {}", s.bot, s.paso, s.detalle);
+                if s.paso != last { println!("{line}"); last = s.paso.clone(); }
+            }).unwrap_or_else(|err| panic!("{}: {err}", e.id));
+            println!("{} instalado en {:?} ({} s)", e.id, dir, t0.elapsed().as_secs());
+            assert!(dir.join(".venv/Scripts/python.exe").exists());
+        }
     }
 }

@@ -325,13 +325,14 @@ mod e2e {
     fn install_requirements_real() {
         let py = std::path::PathBuf::from(std::env::var("LIRIO_E2E_PY").expect("LIRIO_E2E_PY"));
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("requirements.txt"), "six\npyyaml>=6\n").unwrap();
+        std::fs::write(dir.path().join("requirements.txt"), "six\npyyaml>=6\nsrt==3.5.3\n").unwrap();
         let wheels = dir.path().join("w");
         let mut log = vec![];
         crate::installer::install_requirements(&py, dir.path(), &dir.path().join("requirements.txt"), &wheels, "librerias",
                                                &mut |_, d, p| log.push(format!("{p:?} {d}"))).unwrap();
         for l in &log { println!("{l}"); }
         assert!(log.iter().any(|l| l.contains("Descargando librerías")), "usó la descarga en paralelo");
+        assert!(log.iter().any(|l| l.contains("Preparando srt")), "construyó el paquete de código fuente");
         assert!(!wheels.exists(), "borra lo descargado");
     }
 }

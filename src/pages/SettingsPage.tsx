@@ -16,6 +16,8 @@ const LABELS: Record<Expression, string> = {
 
 export function SettingsPage() {
   const [key, setKey] = useState<{ id: string; llave_publica: string } | null>(null)
+  const [paths, setPaths] = useState<{ programa: string; datos: string } | null>(null)
+  useEffect(() => { api.helpPaths().then(setPaths).catch(() => {}) }, [])
   const [expr, setExpr] = useState<Expression>('feliz')
   useEffect(() => { api.approverKey().then(setKey).catch(() => {}) }, [])
 
@@ -42,6 +44,8 @@ export function SettingsPage() {
           <dl className="kv">
             <dt>Identificador</dt><dd className="mono">{key?.id ?? '…'}</dd>
             <dt>Llave pública</dt><dd className="mono wrap">{key?.llave_publica ?? '…'}</dd>
+            <dt>Carpeta de datos</dt><dd className="mono wrap small">{paths?.datos ?? '…'}</dd>
+            <dt>Programa</dt><dd className="mono wrap small">{paths?.programa ?? '…'}</dd>
           </dl>
         </section>
         <section className="panel">

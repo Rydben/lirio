@@ -74,6 +74,8 @@ function Main() {
   }, [])
   const [query, setQuery] = useState('')
   const [crashed, setCrashed] = useState(false)
+  const [testData, setTestData] = useState<string | null>(null)
+  useEffect(() => { api.releaseInfo().then((r) => setTestData(r.prueba ? r.datos ?? '?' : null)).catch(() => {}) }, [])
   useEffect(() => { api.lastSession().then((s) => setCrashed(s.cerrado_de_golpe)).catch(() => {}) }, [])
   const { overview, error, uploads } = useStore()
   const bots = useMemo(() => overview?.modules ?? [], [overview])
@@ -147,6 +149,12 @@ function Main() {
           <WindowButtons />
         </div>
         <div className="content">
+          {testData && (
+            <div className="panel banner-warn">
+              <Icon name="alert" size={18} />
+              <span>Este Lirio está en <b>modo de prueba</b> (carpeta {testData}): su llave no es la tuya y los bots no aceptarán sus aprobaciones. Ciérralo y abre Lirio desde el acceso directo.</span>
+            </div>
+          )}
           {crashed && (
             <div className="panel banner-warn">
               <Icon name="alert" size={18} />

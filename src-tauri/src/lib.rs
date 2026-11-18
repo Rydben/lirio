@@ -558,7 +558,10 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
 /// Versión de Lirio y dónde se publican las versiones (para el botón "Enviar idea" y las actualizaciones).
 #[tauri::command]
 fn release_info() -> Value {
-    json!({"version": env!("CARGO_PKG_VERSION"), "repo": option_env!("LIRIO_REPO")})
+    json!({"version": env!("CARGO_PKG_VERSION"), "repo": option_env!("LIRIO_REPO"),
+           // Lirio abierto con carpetas de prueba: se avisa bien visible para no confundirlo con el de verdad
+           "prueba": std::env::var_os("LIRIO_DATOS").is_some() || std::env::var_os("LIRIO_CONFIG").is_some(),
+           "datos": data_dir().display().to_string()})
 }
 
 /// Imagen pequeña como data URL (solo png/jpg/webp de menos de 8 MB).
