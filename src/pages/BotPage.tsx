@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApprovalCard, useSignedDecision } from '../components/Approvals'
 import { ChatPanel } from '../components/ChatPanel'
+import { GpuPanel } from '../components/GpuPanel'
+import { StylePanel } from '../components/StylePanel'
+import { ThumbnailsPanel } from '../components/ThumbnailsPanel'
+import { TrashPanel } from '../components/TrashPanel'
 import { Insights } from '../components/Insights'
 import { SettingsForm } from '../components/SettingsForm'
 import { TwitchConnect } from '../components/TwitchConnect'
@@ -16,6 +20,7 @@ import { useStore } from '../lib/store'
 import { botSummary } from './Home'
 
 export type BotTab = 'resumen' | 'cola' | 'espera' | 'aprobaciones' | 'estadisticas' | 'chat' | 'twitch' | 'voz' | 'ajustes'
+  | 'miniaturas' | 'estilo' | 'papelera'
 
 const VIDEO_TABS: [BotTab, string][] = [
   ['resumen', 'Resumen'], ['cola', 'Cola de subida'], ['espera', 'En espera'],
@@ -54,8 +59,14 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
   const isVideo = bot.id === 'twitch-autoeditor'
   const hasTwitch = bot.commands.includes('connect')
   const base = isVideo ? VIDEO_TABS : OTHER_TABS
+  // Pestañas que aparecen solo si el bot declara el comando (las páginas nuevas las sirve el propio bot)
+  const has = (c: string) => bot.commands.includes(c)
+  const styleKind = has('referencia-miniatura') ? 'miniatura' : 'video'
   const tabs: [BotTab, string][] = [
     ...base.slice(0, -1),
+    ...(has('miniaturas-listar') ? [['miniaturas', 'Miniaturas'] as [BotTab, string]] : []),
+    ...(has('estilo-chat') ? [['estilo', 'Tu estilo'] as [BotTab, string]] : []),
+    ...(has('papelera-listar') ? [['papelera', 'Papelera'] as [BotTab, string]] : []),
     ...(hasTwitch ? [['chat', 'Chat'] as [BotTab, string], ['twitch', 'Twitch'] as [BotTab, string]] : []),
     ...(caps.voz ? [['voz', 'Huella de voz'] as [BotTab, string]] : []),
     base[base.length - 1],
@@ -85,6 +96,9 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
         )}
         {tab === 'estadisticas' && <Insights botId={bot.id} />}
         {tab === 'chat' && <ChatPanel botId={bot.id} />}
+        {tab === 'miniaturas' && <ThumbnailsPanel botId={bot.id} />}
+        {tab === 'estilo' && <StylePanel botId={bot.id} kind={styleKind} />}
+        {tab === 'papelera' && <TrashPanel botId={bot.id} />}
         {tab === 'twitch' && (
           <div className="grid-2">
             <section className="panel"><h3>Cuenta del bot</h3><TwitchConnect botId={bot.id} /></section>
@@ -240,6 +254,7 @@ function Summary({ bot, details }: { bot: BotView; details: Details | null }) {
         {details?.quota && <QuotaLine quota={details.quota} />}
       </section>
       )}
+      <GpuPanel botId={bot.id} />
     </div>
   )
 }

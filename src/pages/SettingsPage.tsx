@@ -1,5 +1,6 @@
 // Configuración: actualizaciones, enviar una idea, YouTube, la llave de aprobaciones y el avatar.
 import { useEffect, useState } from 'react'
+import { AntivirusHelp } from '../components/AntivirusHelp'
 import { Avatar } from '../components/Avatar'
 import { EXPRESSIONS } from '../components/Face'
 import { YouTubeGuide } from '../components/YouTubeGuide'
@@ -29,6 +30,7 @@ export function SettingsPage() {
         <SendIdea />
       </div>
       <AutoStart />
+      <AntivirusHelp open={window.location.hash.includes('antivirus')} />
       <YouTubeSection />
       <div className="grid-2">
         <section className="panel">

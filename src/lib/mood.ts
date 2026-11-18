@@ -13,6 +13,12 @@ export interface Mood {
 
 export function moodFor(bots: BotView[], uploading = false): Mood {
   const main = bots.filter((b) => !b.parent)
+  const missing = main.filter((b) => b.state === 'files_missing')
+  if (missing.length) {
+    return { expression: 'triste', level: 'error', title: 'Faltan archivos',
+      detail: `A ${names(missing)} le faltan archivos. Seguramente el antivirus (Norton, por ejemplo) los ha puesto en cuarentena: ` +
+        'mira Configuración → Ayuda con el antivirus.' }
+  }
   const broken = main.filter((b) => b.state === 'error' || b.state === 'crashed' || b.status?.last_error)
   if (broken.length) {
     return { expression: 'triste', level: 'error', title: 'Algo ha fallado',
@@ -56,7 +62,7 @@ function names(bots: BotView[]) {
 
 const STATE_LABELS: Record<string, string> = {
   idle: 'En reposo', running: 'Trabajando', watching: 'Vigilando', waiting: 'Esperando', needs_login: 'Sin sesión',
-  stopped: 'Parado', error: 'Error', crashed: 'Caído', stalled: 'Atascado', on_demand: 'A demanda', unknown: 'Sin datos',
+  stopped: 'Parado', error: 'Error', crashed: 'Caído', stalled: 'Atascado', files_missing: 'Faltan archivos', on_demand: 'A demanda', unknown: 'Sin datos',
 }
 
 /** ¿Puede este Lirio firmar aprobaciones para el bot? null = el bot no usa aprobaciones firmadas. */
@@ -79,6 +85,7 @@ export function stateTone(b: BotView): 'ok' | 'working' | 'warning' | 'error' | 
     case 'watching': case 'idle': return 'ok'
     case 'running': return 'working'
     case 'waiting': case 'needs_login': case 'stopped': case 'stalled': return 'warning'
+    case 'files_missing': return 'error'
     case 'error': case 'crashed': return 'error'
     default: return 'muted'
   }

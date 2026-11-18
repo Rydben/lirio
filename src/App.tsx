@@ -73,6 +73,8 @@ function Main() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
   const [query, setQuery] = useState('')
+  const [crashed, setCrashed] = useState(false)
+  useEffect(() => { api.lastSession().then((s) => setCrashed(s.cerrado_de_golpe)).catch(() => {}) }, [])
   const { overview, error, uploads } = useStore()
   const bots = useMemo(() => overview?.modules ?? [], [overview])
   const mood = moodFor(bots, Object.keys(uploads).length > 0)
@@ -145,6 +147,14 @@ function Main() {
           <WindowButtons />
         </div>
         <div className="content">
+          {crashed && (
+            <div className="panel banner-warn">
+              <Icon name="alert" size={18} />
+              <span>La última vez Lirio se cerró de golpe. Si te pasa a menudo, suele ser el antivirus (Norton, por ejemplo).</span>
+              <button className="btn btn--ghost" onClick={() => { setCrashed(false); window.location.hash = '#settings/antivirus' }}>Ver cómo arreglarlo</button>
+              <button className="btn btn--ghost" aria-label="Cerrar aviso" onClick={() => setCrashed(false)}><Icon name="close" size={16} /></button>
+            </div>
+          )}
           {page.kind === 'home' && <Home go={go} />}
           {page.kind === 'bot' && <BotPage key={`${page.id}-${page.tab ?? ''}`} id={page.id} tab={page.tab} />}
           {page.kind === 'approvals' && <ApprovalsPage />}

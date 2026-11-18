@@ -33,7 +33,12 @@ export function Welcome({ onFinish }: { onFinish: () => void }) {
 
   useEffect(() => {
     const un = api.onInstall((e) => {
-      if (e.step) setLog((l) => ({ ...l, [e.step!.bot]: e.step }))
+      // sin porcentaje (p. ej. «instalando…»), se mantiene el último del mismo paso en vez de volver a 0
+      if (e.step) setLog((l) => {
+        const prev = l[e.step!.bot]
+        const percent = e.step!.percent ?? (prev?.paso === e.step!.paso ? prev.percent : null)
+        return { ...l, [e.step!.bot]: { ...e.step!, percent } }
+      })
       if (e.hecho) setResult({ ok: !!e.ok, error: e.error })
     })
     return () => { un.then((f) => f()) }

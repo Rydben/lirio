@@ -55,12 +55,13 @@ fn command_for(m: &Module, command: &str, args: &[String]) -> Result<Command, St
     let common = matches!(command, "approvals" | "doctor" | "upload" | "auth" | "hold" | "voz-texto" | "voz-dispositivos"
                                    | "ajustes-esquema" | "ajustes" | "ajustes-guardar" | "estadisticas" | "registrar-voz"
                                    | "probar-voz" | "ultimo-directo" | "bans-recientes");
+    // los comandos nuevos (papelera, miniaturas, estilo) solo si el bot los declara en su manifiesto
     if !m.has_command(command) && !common {
         return Err(format!("{} no tiene el comando '{command}'", m.name()));
     }
     let py = m.python();
     if !py.exists() {
-        return Err(format!("No encuentro el Python del bot: {}", py.display()));
+        return Err(format!("Falta el Python del bot ({}). Puede que tu antivirus lo haya puesto en cuarentena:                             mira Configuración → Ayuda con el antivirus.", py.display()));
     }
     let mut cmd = Command::new(py);
     cmd.current_dir(m.cwd())

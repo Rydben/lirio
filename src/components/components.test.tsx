@@ -52,10 +52,11 @@ describe('Avatar', () => {
     const { container } = render(<Avatar expression={e} />)
     expect(container.querySelector(`[data-expression="${e}"]`)).toBeInTheDocument()
   })
-  it('la cara normal lleva el logo de Lirio y parpadea', () => {
+  it('la cara normal es solo la cara (sin el logo de Lirio en la pantalla) y parpadea', () => {
     const { container } = render(<Avatar expression="feliz" />)
     expect(container.querySelector('.face--blink')).toBeInTheDocument()
-    expect(container.querySelectorAll('.face__main path').length).toBeGreaterThan(6)
+    expect(container.querySelectorAll('.face__main ellipse').length).toBe(2)
+    expect(container.querySelectorAll('.face__main path').length).toBe(1)
   })
 })
 

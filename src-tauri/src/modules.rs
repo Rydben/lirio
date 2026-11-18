@@ -100,6 +100,24 @@ impl Module {
         normalize(&self.dir.join(p))
     }
 
+    /// Archivos imprescindibles del bot que han desaparecido (típico de un antivirus que los pone en cuarentena:
+    /// el Python privado del bot y su pythonw, sin firma de Authenticode). Vacío si todo está.
+    pub fn missing_files(&self) -> Vec<String> {
+        let py = self.python();
+        // "python" a secas = el del sistema (bots del creador): no se comprueba aquí
+        if !py.is_absolute() || !py.parent().is_some_and(|d| d.ends_with("Scripts")) { return vec![]; }
+        // solo si el resto de ese Python sigue ahí (lo que deja una cuarentena): su DLL o el pyvenv.cfg del venv
+        let scripts = py.parent().unwrap();
+        let rest = scripts.join("python312.dll").exists()
+            || scripts.parent().is_some_and(|v| v.join("pyvenv.cfg").exists());
+        let mut out = vec![];
+        if !rest { return out; }
+        if !py.exists() { out.push(py.display().to_string()); }
+        let pyw = py.with_file_name("pythonw.exe");
+        if py.exists() && !pyw.exists() && py.with_file_name("python312.dll").exists() { out.push(pyw.display().to_string()); }
+        out
+    }
+
     pub fn py_module(&self) -> String {
         self.manifest["entrypoint"]["module"].as_str().unwrap_or_default().to_string()
     }
@@ -148,6 +166,11 @@ impl Module {
                 }
             }
         }
+        let missing = self.missing_files();
+        if !missing.is_empty() {
+            state = "files_missing".into();
+            note = Some("faltan archivos del bot: puede que el antivirus los haya puesto en cuarentena");
+        }
         let approvals = read_json(&self.approvals_path());
         let pending: Vec<Value> = pending_list(&approvals);
         let stop_active = !self.is_sub_bot() && self.kill_switch_path().exists();
@@ -169,6 +192,7 @@ impl Module {
             "stop_active": stop_active,
             "stop_requested": stop_requested,
             "icon": icon_data_url(&self.dir, &self.manifest),
+            "missing_files": missing,
         })
     }
 }

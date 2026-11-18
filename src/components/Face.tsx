@@ -2,17 +2,17 @@
 // Coordenadas en una caja de 100x76 (la pantalla de la TV).
 import type { ReactNode } from 'react'
 import type { Expression } from '../lib/mood'
-import { LirioPaths } from './LirioLogo'
 
 const SMILE = 'M37 52 Q50 63 63 52'
 const FROWN = 'M38 60 Q50 50 62 60'
 
 const FACES: Record<Expression, ReactNode> = {
-  // Normal: el logo de Lirio hace de "ojos" (sustituye al "db") y debajo, la sonrisa
+  // Normal: solo la cara (el logo de Lirio no va en la pantalla del avatar; el «db» de la chaqueta sí se queda)
   feliz: (
     <>
-      <g transform="translate(30.2 -1.5) scale(0.62)"><LirioPaths strokeWidth={6.4} /></g>
-      <path d="M38 50 Q50 61 62 50" />
+      <ellipse cx="35" cy="30" rx="5" ry="7" />
+      <ellipse cx="65" cy="30" rx="5" ry="7" />
+      <path d={SMILE} />
     </>
   ),
   ojos_cerrados: (

@@ -8,7 +8,14 @@ use serde_json::{Map, Value};
 pub enum Kind {
     Flag,
     Int(i64, i64),
+    /// Texto corto de una línea (≤ 80)
     Text,
+    /// Mensaje de chat de una línea (≤ 500)
+    LongText,
+    /// Ruta absoluta de Windows (≤ 400). El bot comprueba que esté dentro de sus carpetas.
+    Path,
+    /// Uno de estos valores
+    Choice(&'static [&'static str]),
 }
 
 /// (comando, [(opción, tipo)])
@@ -30,6 +37,19 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("estadisticas", &[("--refrescar", Kind::Flag), ("--sin-ia", Kind::Flag)]),
     // permiso extra de solo lectura para leer los comentarios de tus vídeos (abre el navegador de Google)
     ("auth", &[("--comentarios", Kind::Flag)]),
+    // Bot de miniaturas: las de cada vídeo y elegir cuál va con él
+    ("miniaturas-listar", &[]),
+    ("miniatura-elegir", &[("--video", Kind::Text), ("--archivo", Kind::Path)]),
+    // Papelera del editor: borrar SIEMPRE es pedir una solicitud que se aprueba con el gesto (aprobar-firmado)
+    ("papelera-listar", &[]),
+    ("papelera-borrar", &[("--solicitar", Kind::Path)]),
+    ("papelera-auto", &[("--solicitar", Kind::Flag), ("--directos", Kind::Choice(&["on", "off"])),
+                        ("--videos", Kind::Choice(&["on", "off"]))]),
+    // Estilo propio de cada usuario
+    ("estilo-chat", &[("--mensaje", Kind::LongText)]),
+    ("estilo-ver", &[]),
+    ("referencia-video", &[("--archivo", Kind::Path)]),
+    ("referencia-miniatura", &[("--archivo", Kind::Path)]),
 ];
 
 pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<String>, String> {
@@ -49,12 +69,22 @@ pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<Strin
                 out.push(name.clone());
                 out.push(n.to_string());
             }
-            Kind::Text => {
+            Kind::Text | Kind::LongText | Kind::Path => {
                 let t = value.as_str().unwrap_or("").trim();
                 if t.is_empty() { continue; }
-                if t.starts_with('-') || t.len() > 80 || t.chars().any(|c| c.is_control()) {
+                let max = match kind { Kind::Text => 80, Kind::LongText => 500, _ => 400 };
+                if t.starts_with('-') || t.chars().count() > max || t.chars().any(|c| c.is_control()) {
                     return Err(format!("valor no permitido para {name}"));
                 }
+                if kind == Kind::Path && !is_absolute_windows_path(t) {
+                    return Err(format!("{name} debe ser una ruta completa"));
+                }
+                out.push(name.clone());
+                out.push(t.to_string());
+            }
+            Kind::Choice(options) => {
+                let t = value.as_str().filter(|t| options.contains(t))
+                    .ok_or_else(|| format!("{name} debe ser uno de: {}", options.join(", ")))?;
                 out.push(name.clone());
                 out.push(t.to_string());
             }
@@ -65,6 +95,14 @@ pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<Strin
         out.push("--desde-lirio".into());
     }
     Ok(out)
+}
+
+/// `C:\carpeta\archivo` o `\\servidor\carpeta` (sin `..`)
+fn is_absolute_windows_path(t: &str) -> bool {
+    let b = t.as_bytes();
+    let drive = b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/');
+    let unc = t.starts_with("\\\\");
+    (drive || unc) && !t.split(['\\', '/']).any(|p| p == "..")
 }
 
 /// "PROGRESO 42" (o "PROGRESO 42%") en una línea de stderr -> 42
@@ -99,6 +137,21 @@ mod tests {
         assert!(build_args("enroll", &m(json!({"--nombre": "a\nb"}))).is_err());
         // un nombre vacío no se pasa (solo queda la marca de que la grabación la pide Lirio)
         assert_eq!(build_args("enroll", &m(json!({"--nombre": "  "}))).unwrap(), vec!["--desde-lirio"]);
+    }
+
+    #[test]
+    fn paths_choices_and_long_messages() {
+        assert_eq!(build_args("papelera-borrar", &m(json!({"--solicitar": "D:\\Vídeos\\directo 1.mp4"}))).unwrap(),
+                   vec!["--solicitar", "D:\\Vídeos\\directo 1.mp4"]);
+        assert!(build_args("papelera-borrar", &m(json!({"--solicitar": "directo.mp4"}))).is_err(), "solo rutas completas");
+        assert!(build_args("papelera-borrar", &m(json!({"--solicitar": "C:\\a\\..\\..\\Windows"}))).is_err());
+        assert!(build_args("papelera-borrar", &m(json!({"--borrar-ya": true}))).is_err(), "borrar sin aprobación no existe");
+        assert_eq!(build_args("papelera-auto", &m(json!({"--solicitar": true, "--directos": "on"}))).unwrap(),
+                   vec!["--solicitar", "--directos", "on"]);
+        assert!(build_args("papelera-auto", &m(json!({"--directos": "siempre"}))).is_err());
+        let long = "a".repeat(300);
+        assert!(build_args("estilo-chat", &m(json!({"--mensaje": long}))).is_ok());
+        assert!(build_args("estilo-chat", &m(json!({"--mensaje": "a".repeat(501)}))).is_err());
     }
 
     #[test]

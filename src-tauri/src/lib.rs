@@ -8,6 +8,8 @@ mod approver;
 mod autostart;
 pub mod catalog;
 mod cli;
+pub mod fetch;
+mod ollama;
 mod flags;
 pub mod installer;
 mod journal;
@@ -521,6 +523,75 @@ fn release_info() -> Value {
     json!({"version": env!("CARGO_PKG_VERSION"), "repo": option_env!("LIRIO_REPO")})
 }
 
+/// Imagen pequeña como data URL (solo png/jpg/webp de menos de 8 MB).
+pub fn image_data_url(p: &std::path::Path) -> Option<String> {
+    use base64::{engine::general_purpose::STANDARD as B64, Engine};
+    let ext = p.extension()?.to_string_lossy().to_lowercase();
+    let mime = match ext.as_str() { "png" => "image/png", "jpg" | "jpeg" => "image/jpeg", "webp" => "image/webp", _ => return None };
+    let meta = std::fs::metadata(p).ok()?;
+    if !meta.is_file() || meta.len() > 8 * 1024 * 1024 { return None; }
+    Some(format!("data:{mime};base64,{}", B64.encode(std::fs::read(p).ok()?)))
+}
+
+/// Miniaturas de cada vídeo (`miniaturas-listar` del bot) con la imagen ya leída: Lirio solo lee las que el bot lista.
+#[tauri::command]
+async fn thumbnails(state: State<'_, AppState>, id: String) -> Result<cli::CliResult, String> {
+    let m = state.module(&id)?;
+    let mut cmd = cli::build_command_with_flags(&m, "miniaturas-listar", &serde_json::Map::new())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let out = cmd.output().map_err(|e| e.to_string())?;
+        let mut r = cli::interpret(out.status.code().unwrap_or(-1), &out.stdout, &out.stderr);
+        if let Some(videos) = r.data["videos"].as_array_mut() {
+            videos.truncate(30);
+            for v in videos.iter_mut() {
+                for t in v["miniaturas"].as_array_mut().into_iter().flatten() {
+                    let img = t["ruta"].as_str().and_then(|p| image_data_url(std::path::Path::new(p)));
+                    t["img"] = img.map(Value::String).unwrap_or(Value::Null);
+                }
+            }
+        }
+        Ok(r)
+    }).await.map_err(|e| e.to_string())?
+}
+
+/// Abre en el Explorador una carpeta del bot, solo si el propio bot la declara en `papelera-listar` (carpetas).
+#[tauri::command]
+async fn open_bot_folder(app: tauri::AppHandle, state: State<'_, AppState>, id: String, ruta: String) -> Result<(), String> {
+    let m = state.module(&id)?;
+    let mut cmd = cli::build_command_with_flags(&m, "papelera-listar", &serde_json::Map::new())?;
+    let out = tauri::async_runtime::spawn_blocking(move || cmd.output()).await.map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    let r = cli::interpret(out.status.code().unwrap_or(-1), &out.stdout, &out.stderr);
+    let declared = r.data["carpetas"].as_object().is_some_and(|c| c.values().any(|v| v.as_str() == Some(ruta.as_str())));
+    if !declared { return Err("Esa carpeta no es del bot".into()); }
+    use tauri_plugin_opener::OpenerExt;
+    app.opener().open_path(&ruta, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// Carpetas de Lirio en este PC (para añadirlas como excepción en el antivirus).
+#[tauri::command]
+fn help_paths(state: State<AppState>) -> Value {
+    let programa = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.display().to_string())).unwrap_or_default();
+    json!({ "programa": programa, "datos": state.data_dir.display().to_string() })
+}
+
+/// Marca de "Lirio abierto". Si al arrancar sigue ahí y el PC no se ha reiniciado desde entonces,
+/// Lirio se cerró de golpe (lo típico cuando un antivirus lo para): se avisa con la ayuda del antivirus.
+pub const SESSION_MARK: &str = "sesion-abierta";
+
+pub fn closed_unexpectedly(mark: &std::path::Path, boot: Option<chrono::DateTime<chrono::Utc>>) -> bool {
+    let Ok(modified) = std::fs::metadata(mark).and_then(|m| m.modified()) else { return false };
+    let modified: chrono::DateTime<chrono::Utc> = modified.into();
+    boot.is_none_or(|b| modified > b)
+}
+
+static UNEXPECTED_CLOSE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[tauri::command]
+fn last_session() -> Value {
+    json!({ "cerrado_de_golpe": UNEXPECTED_CLOSE.load(std::sync::atomic::Ordering::Relaxed) })
+}
+
 /// Llave pública de Lirio (no es secreta): la que se fija en wall_rules.json de cada bot.
 #[tauri::command]
 fn approver_key(state: State<AppState>) -> approver::PublicKeyInfo {
@@ -583,26 +654,75 @@ pub fn run() {
         return;
     }
     tauri::Builder::default()
+        // Lirio se abre UNA sola vez: si ya está abierto, se trae al frente la ventana que hay (va el primero).
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            use tauri::Manager;
+            if let Some(w) = app.webview_windows().values().next() {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup({
+            let mark = data.join(SESSION_MARK);
+            move |_| {
+                // aquí ya sabemos que somos la única ventana de Lirio (single-instance va antes)
+                UNEXPECTED_CLOSE.store(closed_unexpectedly(&mark, winutil::boot_time()), std::sync::atomic::Ordering::Relaxed);
+                let _ = std::fs::write(&mark, chrono::Utc::now().to_rfc3339());
+                Ok(())
+            }
+        })
         .manage(AppState { config_path, journal: journal::Journal::new(&data), data_dir: data, approver, uploads: Mutex::new(HashSet::new()),
                            use_defaults: std::env::var_os("LIRIO_CONFIG").is_none() })
         .invoke_handler(tauri::generate_handler![
             overview, module_details, activity, run_command, start_upload, gesture_begin,
             signed_decision, kill_switch_on, kill_switch_off, start_bot, approver_key, start_page,
             wizard::first_run, wizard::get_catalog, wizard::install_bots, wizard::ai_status, wizard::test_claude,
-            wizard::ollama_pull, wizard::install_client_secret, release_info, check_update, install_update,
-            journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions
+            wizard::ollama_pull, wizard::ollama_setup, wizard::install_client_secret, wizard::gpu_status, wizard::install_gpu, release_info, check_update, install_update,
+            journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions,
+            help_paths, last_session, open_bot_folder, thumbnails
         ])
-        .run(tauri::generate_context!())
-        .expect("error al arrancar Lirio");
+        .build(tauri::generate_context!())
+        .expect("error al arrancar Lirio")
+        .run({
+            let mark = data_dir().join(SESSION_MARK);
+            move |_, ev| if let tauri::RunEvent::Exit = ev { let _ = std::fs::remove_file(&mark); }
+        });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unexpected_close_only_without_reboot() {
+        let d = tempfile::tempdir().unwrap();
+        let mark = d.path().join(SESSION_MARK);
+        assert!(!closed_unexpectedly(&mark, None), "sin marca: se cerró bien");
+        std::fs::write(&mark, "x").unwrap();
+        let hour = chrono::Duration::hours(1);
+        assert!(closed_unexpectedly(&mark, Some(chrono::Utc::now() - hour)), "marca de después de encender: cierre de golpe");
+        assert!(!closed_unexpectedly(&mark, Some(chrono::Utc::now() + hour)), "marca de antes de reiniciar: apagado normal");
+    }
+
+    #[test]
+    fn quarantined_bot_python_is_reported() {
+        let d = tempfile::tempdir().unwrap();
+        let scripts = d.path().join(".venv").join("Scripts");
+        std::fs::create_dir_all(&scripts).unwrap();
+        std::fs::write(d.path().join("aniuzka.json"),
+                       r#"{"spec":"aniuzka-module/0.1","id":"b","name":"B","version":"1","entrypoint":{"python":".venv/Scripts/python.exe","module":"b","cwd":"."},"commands":{},"paths":{"status":"state/status.json"}}"#).unwrap();
+        let entry = modules::ModuleEntry { ruta: d.path().to_path_buf(), tarea: None };
+        assert!(modules::Module::load(&entry).unwrap().missing_files().is_empty(), "sin Python instalado aún: no es cuarentena");
+        std::fs::write(scripts.join("python312.dll"), "x").unwrap();
+        let m = modules::Module::load(&entry).unwrap();
+        assert_eq!(m.missing_files().len(), 1);
+        assert_eq!(m.view()["state"], "files_missing");
+    }
 
     #[test]
     fn texts() {

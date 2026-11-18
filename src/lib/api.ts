@@ -34,6 +34,7 @@ export interface BotView {
   stop_active: boolean
   stop_requested: boolean
   state_note?: string | null
+  missing_files?: string[]
   pinned_key?: { id: string; llave_publica: string } | null
   icon?: string | null
 }
@@ -132,7 +133,10 @@ export interface AiStatus {
   modelo_recomendado: string
 }
 
-export interface PullEvent { estado?: string; percent?: number | null; hecho: boolean; ok?: boolean; error?: string | null }
+export interface GpuEvent { bot: string; detalle?: string; percent?: number | null; hecho: boolean; ok?: boolean; error?: string | null }
+export interface GpuStatus { declara: boolean; instalado: boolean; nvidia: boolean; progreso: GpuEvent | null }
+
+export interface PullEvent { fase?: string; estado?: string; percent?: number | null; hecho: boolean; ok?: boolean; error?: string | null }
 
 export interface Answers {
   nombre: string
@@ -211,9 +215,23 @@ export const api = {
   firstRun: () => call<boolean>('first_run'),
   catalog: () => call<{ bots: CatalogBot[]; nvidia: boolean }>('get_catalog'),
   installBots: (ids: string[], answers: Answers) => call<void>('install_bots', { ids, answers }),
+  thumbnails: (id: string) => call<CliResult>('thumbnails', { id }),
+  openBotFolder: (id: string, ruta: string) => call<void>('open_bot_folder', { id, ruta }),
+  pickFile: (title: string, kind: 'video' | 'miniatura') =>
+    inTauri() ? openDialog({ title, filters: kind === 'video'
+      ? [{ name: 'Vídeos', extensions: ['mp4', 'mkv', 'mov', 'webm', 'flv'] }]
+      : [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] }) as Promise<string | null>
+      : Promise.resolve(kind === 'video' ? 'C:\\Videos\\referencia.mp4' : 'C:\\Imagenes\\referencia.png'),
+  helpPaths: () => call<{ programa: string; datos: string }>('help_paths'),
+  lastSession: () => call<{ cerrado_de_golpe: boolean }>('last_session'),
+  gpuStatus: (id: string) => call<GpuStatus>('gpu_status', { id }),
+  installGpu: (id: string) => call<void>('install_gpu', { id }),
+  onGpu: (cb: (e: GpuEvent) => void): Promise<UnlistenFn> =>
+    inTauri() ? listen<GpuEvent>('lirio://gpu', (e) => cb(e.payload)) : demo.on('gpu', cb),
   aiStatus: () => call<AiStatus>('ai_status'),
   testClaude: () => call<{ ok: boolean; motivo?: string }>('test_claude'),
   ollamaPull: (model: string) => call<void>('ollama_pull', { model }),
+  ollamaSetup: (model: string) => call<void>('ollama_setup', { model }),
   installClientSecret: (id: string, path: string) => call<string>('install_client_secret', { id, path }),
   releaseInfo: () => call<{ version: string; repo: string | null }>('release_info'),
   checkUpdate: () => call<{ disponible: boolean; version?: string; notas?: string; motivo?: string }>('check_update'),

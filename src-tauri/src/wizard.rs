@@ -62,12 +62,50 @@ pub fn install_bots(app: tauri::AppHandle, state: State<AppState>, ids: Vec<Stri
                 let saved = cfg.save(&config_path);
                 journal.add("instalacion", None, &format!("Bots instalados: {}", ids.join(", ")), saved.is_ok());
                 emit(json!({"hecho": true, "ok": saved.is_ok(), "error": saved.err()}));
+                // Después, y sin bloquear al amigo: las librerías de la gráfica NVIDIA (si hay una y el bot las usa).
+                if installer::has_nvidia() {
+                    for id in &ids {
+                        let dir = data_dir.join("bots").join(id);
+                        if dir.join("requirements-gpu.txt").exists() {
+                            let r = installer::install_gpu(id, &dir, &data_dir.join("descargas"),
+                                                           &mut |v| { let _ = app.emit("lirio://gpu", v); });
+                            journal.add("gpu", Some(id), "Librerías de la gráfica NVIDIA", r.is_ok());
+                        }
+                    }
+                }
             }
             Err(err) => {
                 journal.add("instalacion", None, "La instalación no terminó", false);
                 emit(json!({"hecho": true, "ok": false, "error": err}))
             }
         }
+    });
+    Ok(())
+}
+
+/// ¿Este bot puede ir más rápido con la gráfica NVIDIA? (y cómo va esa instalación, si está en curso)
+#[tauri::command]
+pub fn gpu_status(state: State<AppState>, id: String) -> Result<Value, String> {
+    let m = state.module(&id)?;
+    let mut v = installer::gpu_info(&m.dir);
+    v["nvidia"] = json!(installer::has_nvidia());
+    v["progreso"] = installer::GPU_PROGRESS.lock().unwrap().get(&id).cloned().unwrap_or(Value::Null);
+    Ok(v)
+}
+
+/// Instala ahora (en segundo plano) las librerías de la gráfica de un bot. Avance en `lirio://gpu`.
+#[tauri::command]
+pub fn install_gpu(app: tauri::AppHandle, state: State<AppState>, id: String) -> Result<(), String> {
+    let m = state.module(&id)?;
+    if installer::GPU_PROGRESS.lock().unwrap().get(&id).is_some_and(|v| v["hecho"] == false) {
+        return Err("Ya se está instalando".into());
+    }
+    let cache = state.data_dir.join("descargas");
+    let journal = crate::journal::Journal::new(&state.data_dir);
+    let dir = m.dir.clone();
+    std::thread::spawn(move || {
+        let r = installer::install_gpu(&id, &dir, &cache, &mut |v| { let _ = app.emit("lirio://gpu", v); });
+        journal.add("gpu", Some(&id), "Librerías de la gráfica NVIDIA", r.is_ok());
     });
     Ok(())
 }
@@ -165,27 +203,28 @@ pub async fn test_claude() -> Value {
 /// Descarga un modelo de Ollama mostrando el avance (`lirio://ollama`).
 #[tauri::command]
 pub fn ollama_pull(app: tauri::AppHandle, model: String) -> Result<(), String> {
-    if !model.chars().all(|c| c.is_ascii_alphanumeric() || ".:-_".contains(c)) {
-        return Err("nombre de modelo no válido".into());
-    }
     std::thread::spawn(move || {
-        let emit = |v: Value| { let _ = app.emit("lirio://ollama", v); };
-        let res = (|| -> Result<(), String> {
-            let resp = ureq::post(&format!("{OLLAMA_URL}/api/pull")).timeout(Duration::from_secs(60 * 60 * 3))
-                .send_json(json!({"model": model, "stream": true})).map_err(|e| format!("Ollama no responde: {e}"))?;
-            use std::io::BufRead;
-            for line in std::io::BufReader::new(resp.into_reader()).lines().map_while(Result::ok) {
-                let v: Value = serde_json::from_str(&line).unwrap_or(Value::Null);
-                if let Some(err) = v["error"].as_str() { return Err(err.to_string()); }
-                let pct = match (v["completed"].as_f64(), v["total"].as_f64()) {
-                    (Some(c), Some(t)) if t > 0.0 => Some((c / t * 100.0) as u8),
-                    _ => None,
-                };
-                emit(json!({"estado": v["status"], "percent": pct, "hecho": false}));
-            }
-            Ok(())
-        })();
-        emit(json!({"hecho": true, "ok": res.is_ok(), "error": res.err()}));
+        let mut emit = |fase: &str, detalle: String, percent: Option<u8>| {
+            let _ = app.emit("lirio://ollama", json!({"fase": fase, "estado": detalle, "percent": percent, "hecho": false}));
+        };
+        let res = crate::ollama::pull(&model, &mut emit);
+        let _ = app.emit("lirio://ollama", json!({"hecho": true, "ok": res.is_ok(), "error": res.err()}));
+    });
+    Ok(())
+}
+
+/// Todo de una vez, sin que el amigo haga nada: instala Ollama (si falta), lo arranca y baja el modelo.
+#[tauri::command]
+pub fn ollama_setup(app: tauri::AppHandle, state: State<AppState>, model: String) -> Result<(), String> {
+    let cache = state.data_dir.join("descargas");
+    let journal = crate::journal::Journal::new(&state.data_dir);
+    std::thread::spawn(move || {
+        let mut emit = |fase: &str, detalle: String, percent: Option<u8>| {
+            let _ = app.emit("lirio://ollama", json!({"fase": fase, "estado": detalle, "percent": percent, "hecho": false}));
+        };
+        let res = crate::ollama::install(&cache, &mut emit).and_then(|_| crate::ollama::pull(&model, &mut emit));
+        journal.add("ia", None, &format!("IA local preparada (Ollama, {model})"), res.is_ok());
+        let _ = app.emit("lirio://ollama", json!({"hecho": true, "ok": res.is_ok(), "error": res.err(), "modelo": model}));
     });
     Ok(())
 }

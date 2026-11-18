@@ -6,6 +6,10 @@ import { Icon, Pill, ProgressBar } from './ui'
 
 type Ia = Answers['ia']
 
+const FASES: Record<string, string> = {
+  descarga: '1/4 Descargando Ollama', instalacion: '2/4 Instalando Ollama', arranque: '3/4 Abriendo Ollama', modelo: '4/4 Bajando el modelo',
+}
+
 interface Props {
   value: Ia
   model?: string
@@ -15,7 +19,7 @@ interface Props {
 export function AiChooser({ value, model, onChange }: Props) {
   const [st, setSt] = useState<AiStatus | null>(null)
   const [claude, setClaude] = useState<'?' | 'ok' | 'sin_sesion' | 'no_instalado' | 'error' | 'probando'>('?')
-  const [pull, setPull] = useState<{ percent: number | null; estado?: string; error?: string | null; done?: boolean } | null>(null)
+  const [pull, setPull] = useState<{ percent: number | null; fase?: string; estado?: string; error?: string | null; done?: boolean } | null>(null)
 
   const refresh = () => api.aiStatus().then(setSt).catch(() => {})
   useEffect(() => { refresh() }, [])
@@ -24,7 +28,7 @@ export function AiChooser({ value, model, onChange }: Props) {
       if (e.hecho) {
         setPull((p) => ({ percent: e.ok ? 100 : p?.percent ?? 0, error: e.ok ? null : e.error, done: true }))
         refresh()
-      } else setPull({ percent: e.percent ?? null, estado: e.estado })
+      } else setPull((p) => ({ percent: e.percent ?? (p?.fase === e.fase ? p?.percent ?? null : null), fase: e.fase, estado: e.estado }))
     })
     return () => { un.then((f) => f()) }
   }, [])
@@ -32,6 +36,14 @@ export function AiChooser({ value, model, onChange }: Props) {
   const recommended = st?.modelo_recomendado ?? 'qwen2.5:3b'
   const chosenModel = model ?? recommended
   const hasModel = st?.ollama_modelos.some((m) => m === chosenModel || m.startsWith(`${chosenModel}`)) ?? false
+
+  // Elegir «IA local» basta: Lirio instala Ollama (si falta), lo abre y baja el modelo, sin que el amigo haga nada.
+  const ready = !!st?.ollama_activo && hasModel
+  const setup = () => { setPull({ percent: 0, fase: 'descarga' }); api.ollamaSetup(chosenModel).catch((e) => setPull({ percent: 0, error: String(e), done: true })) }
+  useEffect(() => {
+    if (value === 'ollama' && st && !ready && !pull) setup()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, st, ready])
 
   const testClaude = async () => {
     setClaude('probando')
@@ -53,34 +65,31 @@ export function AiChooser({ value, model, onChange }: Props) {
           Funciona en tu PC sin cuentas. Es <b>peor que Claude</b> eligiendo los mejores momentos, y usa tu gráfica
           (Lirio no la usa mientras juegas o transmites).
         </p>
+        {value !== 'ollama' && !st?.ollama_instalado && (
+          <p className="muted small">Si la eliges, Lirio lo instala todo solo: Ollama (unos 1,9 GB, de ollama.com) y el modelo para tu gráfica.</p>
+        )}
         {value === 'ollama' && (
           <div className="ai-option__body">
-            {!st?.ollama_instalado ? (
-              <>
-                <p className="warn">Ollama no está instalado.</p>
-                <div className="row">
-                  <button className="btn btn--ghost" onClick={() => api.openUrl('https://ollama.com/download/windows')}>Descargar Ollama</button>
-                  <button className="btn btn--outline" onClick={refresh}>Ya lo he instalado</button>
-                </div>
-              </>
-            ) : !st.ollama_activo ? (
-              <>
-                <p className="warn">Ollama está instalado pero no está abierto. Ábrelo desde el menú Inicio.</p>
-                <button className="btn btn--outline" onClick={refresh}>Comprobar otra vez</button>
-              </>
-            ) : hasModel ? (
-              <p className="ok-text"><Icon name="check" size={16} /> Listo: modelo {chosenModel} descargado.</p>
+            {ready ? (
+              <p className="ok-text"><Icon name="check" size={16} /> Listo: IA local preparada con el modelo {chosenModel}.</p>
             ) : (
               <>
                 <p className="muted small">
-                  Modelo recomendado para tu gráfica{st.vram_gb ? ` (${st.vram_gb.toFixed(0)} GB)` : ''}: <b>{recommended}</b>.
+                  Lo preparo yo: {st?.ollama_instalado ? '' : 'instalo Ollama (de ollama.com), '}lo abro y bajo el modelo
+                  recomendado para tu gráfica{st?.vram_gb ? ` (${st.vram_gb.toFixed(0)} GB)` : ''}: <b>{recommended}</b>.
                 </p>
-                {pull && !pull.done && <ProgressBar percent={pull.percent ?? 0} label="Descarga del modelo" />}
-                {pull?.error && <p className="error-text">{pull.error}</p>}
-                <button className="btn btn--primary" disabled={!!pull && !pull.done}
-                  onClick={() => { setPull({ percent: 0 }); api.ollamaPull(chosenModel) }}>
-                  <Icon name="upload" size={16} /> Descargar el modelo
-                </button>
+                {pull && !pull.error && (
+                  <>
+                    <div className="muted small">{FASES[pull.fase ?? ''] ?? 'Preparando'}{pull.estado ? ` · ${pull.estado}` : ''}</div>
+                    <ProgressBar percent={pull.done ? 100 : pull.percent ?? 0} label="IA local" />
+                  </>
+                )}
+                {pull?.error && (
+                  <>
+                    <p className="error-text">{pull.error}</p>
+                    <button className="btn btn--primary" onClick={setup}><Icon name="refresh" size={16} /> Reintentar</button>
+                  </>
+                )}
               </>
             )}
           </div>

@@ -65,6 +65,8 @@ pub fn sha256_hex(data: &[u8]) -> String {
     hex(&h.finalize())
 }
 
+pub fn hex_digest(b: &[u8]) -> String { hex(b) }
+
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
@@ -246,6 +248,76 @@ pub fn pip_wheel_from_pypi(meta: &Value) -> Result<(String, String), String> {
         .ok_or_else(|| "PyPI no devolvió el wheel de pip".into())
 }
 
+/// Instala un requirements.txt rápido y con avance real:
+/// 1) pip calcula qué hace falta SIN descargar los paquetes grandes (`--dry-run --report`);
+/// 2) Lirio los baja en paralelo, reanudando, reintentando y comprobando el SHA-256 que da PyPI;
+/// 3) pip instala desde esa carpeta, sin volver a internet. La carpeta se borra al acabar.
+/// Si el paso 1 falla (pip antiguo, sin red al índice…), se usa pip normal como antes.
+pub fn install_requirements(python: &Path, dir: &Path, req: &Path, wheels: &Path, paso: &str,
+                            say: &mut dyn FnMut(&str, String, Option<u8>)) -> Result<(), String> {
+    say(paso, "Calculando qué librerías hacen falta…".into(), None);
+    std::fs::create_dir_all(wheels).map_err(|x| x.to_string())?;
+    let report = wheels.join("plan.json");
+    let mut c = Command::new(python);
+    c.current_dir(dir).args(["-m", "pip", "install", "--dry-run", "--quiet", "--disable-pip-version-check", "--report"])
+        .arg(&report).arg("-r").arg(req);
+    let plan = run_streaming(c, |_| {}).ok()
+        .and_then(|_| std::fs::read_to_string(&report).ok())
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| crate::fetch::items_from_pip_report(&v, wheels).ok());
+    let base_args = ["-m", "pip", "install", "--no-warn-script-location", "--disable-pip-version-check"];
+    match plan {
+        Some(items) if items.is_empty() => { say(paso, "Las librerías ya estaban".into(), Some(100)); }
+        Some(items) => {
+            crate::fetch::fetch_all(items, 4, |p| {
+                let what = if p.current.is_empty() { String::new() } else { format!(" ({})", p.current) };
+                say(paso, format!("Descargando librerías{what}: {}", p.text()), Some(p.percent()));
+            })?;
+            say(paso, "Instalando las librerías (sin internet, desde lo descargado)…".into(), None);
+            let mut c = Command::new(python);
+            c.current_dir(dir).args(base_args).arg("--no-index").arg("--find-links").arg(wheels).arg("-r").arg(req);
+            run_streaming(c, |line| if let Some(s) = pip_line_summary(line) { say(paso, s, None) })?;
+        }
+        None => {
+            say(paso, "Instalando librerías con pip (puede tardar varios minutos)".into(), None);
+            let mut c = Command::new(python);
+            c.current_dir(dir).args(base_args).arg("-r").arg(req);
+            run_streaming(c, |line| if let Some(s) = pip_line_summary(line) { say(paso, s, None) })?;
+        }
+    }
+    let _ = std::fs::remove_dir_all(wheels);
+    Ok(())
+}
+
+/// Librerías de la gráfica NVIDIA de un bot (si las declara): ¿hacen falta, ya están?
+pub fn gpu_info(bot_dir: &Path) -> Value {
+    let req = bot_dir.join("requirements-gpu.txt");
+    let installed = bot_dir.join(".venv").join("Lib").join("site-packages").join("nvidia").join("cudnn").exists();
+    json!({ "declara": req.exists(), "instalado": installed })
+}
+
+/// Avance de las instalaciones de GPU en curso (por bot), para que la página del bot lo enseñe al volver.
+pub static GPU_PROGRESS: std::sync::LazyLock<std::sync::Mutex<std::collections::BTreeMap<String, Value>>> =
+    std::sync::LazyLock::new(Default::default);
+
+/// Instala las librerías de la gráfica NVIDIA de un bot (paso aparte y opcional; el bot sigue en CPU mientras).
+pub fn install_gpu(bot_id: &str, bot_dir: &Path, cache: &Path, emit: &mut dyn FnMut(Value)) -> Result<(), String> {
+    let req = bot_dir.join("requirements-gpu.txt");
+    if !req.exists() { return Err("Este bot no usa la gráfica".into()); }
+    if !has_nvidia() { return Err("No hay una gráfica NVIDIA en este PC: el bot funciona en CPU".into()); }
+    let python = bot_dir.join(".venv").join("Scripts").join("python.exe");
+    let mut say = |_: &str, detalle: String, percent: Option<u8>| {
+        let v = json!({ "bot": bot_id, "detalle": detalle, "percent": percent, "hecho": false });
+        GPU_PROGRESS.lock().unwrap().insert(bot_id.to_string(), v.clone());
+        emit(v);
+    };
+    let r = install_requirements(&python, bot_dir, &req, &cache.join(format!("gpu-{bot_id}")), "gpu", &mut say);
+    let v = json!({ "bot": bot_id, "hecho": true, "ok": r.is_ok(), "error": r.as_ref().err() });
+    GPU_PROGRESS.lock().unwrap().insert(bot_id.to_string(), v.clone());
+    emit(v);
+    r
+}
+
 /// Lo necesario para instalar un bot del catálogo.
 pub struct InstallJob<'a> {
     pub entry: &'a CatalogEntry,
@@ -314,16 +386,11 @@ pub fn install_bot(job: &InstallJob, emit: &mut dyn FnMut(Step)) -> Result<PathB
         extract_zip(&whl, &py_dir.join("Lib").join("site-packages"))?;
     }
 
-    // 4. Librerías del bot
-    let mut reqs = vec![dir.join("requirements.txt")];
-    if let Some(gpu) = e.requirements_gpu.as_deref().filter(|_| has_nvidia()) {
-        reqs.push(dir.join(gpu));
-    }
-    for r in reqs.iter().filter(|r| r.exists()) {
-        say("librerias", "Instalando librerías (puede tardar varios minutos)".into(), None);
-        let mut c = Command::new(&python);
-        c.current_dir(&dir).args(["-m", "pip", "install", "--no-warn-script-location", "--disable-pip-version-check", "-r"]).arg(r);
-        run_streaming(c, |line| if let Some(s) = pip_line_summary(line) { say("librerias", s, None) })?;
+    // 4. Librerías del bot. Las de la gráfica NVIDIA (cuDNN, cuBLAS: GB) van aparte, después, con `install_gpu`:
+    //    el bot ya funciona en CPU mientras tanto.
+    let req = dir.join("requirements.txt");
+    if req.exists() {
+        install_requirements(&python, &dir, &req, &job.cache.join(format!("librerias-{}", e.id)), "librerias", &mut say)?;
     }
 
     // 5. Modelos (descargados aquí, nunca en el paquete)
