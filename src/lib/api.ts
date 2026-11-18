@@ -201,6 +201,8 @@ export const api = {
   signedDecision: (token: string, id: string, operacion: SignedOperation, objetivo: string,
     accion?: string | null, clave?: string | null) =>
     call<CliResult>('signed_decision', { token, id, operacion, objetivo, accion: accion ?? null, clave: clave ?? null }),
+  signedApproveDeletes: (token: string, id: string, objetivos: string[]) =>
+    call<CliResult>('signed_approve_deletes', { token, id, objetivos }),
   killSwitchOn: (id: string) => call<void>('kill_switch_on', { id }),
   killSwitchOff: (token: string, id: string) => call<void>('kill_switch_off', { token, id }),
   startBot: (id: string) => call<void>('start_bot', { id }),

@@ -2,7 +2,7 @@
 // el editor crea una solicitud por archivo, Lirio la firma con el gesto (aprobar-firmado) y se repite el borrado.
 // Ninguna IA borra sola. El borrado automático se cambia en Ajustes (y aun así el editor pide aprobación).
 import { useCallback, useEffect, useState } from 'react'
-import { api, pendingApprovals } from '../lib/api'
+import { api } from '../lib/api'
 import { HoldButton } from './HoldButton'
 import { Icon, Pill, timeAgo, useToast } from './ui'
 import { human } from './units'
@@ -36,12 +36,9 @@ export function TrashPanel({ botId, goSettings }: { botId: string; goSettings?: 
     if (first.ok) { toast('ok', `${label}: borrado.`); load(); return }
     const ids: string[] = first.data?.pendientes_de_aprobacion ?? []
     if (first.code !== 5 || ids.length === 0) { toast('error', first.data?.mensaje ?? first.data?.error ?? first.message); load(); return }
-    const pending = pendingApprovals((await api.details(botId)).approvals)
-    for (const id of ids) {
-      const a = pending.find((p) => p.id === id)
-      const r = await api.signedDecision(token, botId, 'approve', id, a?.action, a?.key)
-      if (!r.ok) { toast('error', r.message); load(); return }
-    }
+    // un vídeo con Shorts crea una solicitud por archivo: el mismo gesto las aprueba todas (solo esas, solo borrados)
+    const r = await api.signedApproveDeletes(token, botId, ids)
+    if (!r.ok) { toast('error', r.message); load(); return }
     const second = await api.runWith(botId, 'papelera-borrar', { '@rutas': [ruta] })
     toast(second.ok ? 'ok' : 'error', second.ok ? `${label}: borrado${second.data?.liberado_mb ? ` (${human(second.data.liberado_mb * 1e6)} libres)` : ''}.`
       : second.data?.mensaje ?? second.message)

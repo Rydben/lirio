@@ -284,6 +284,42 @@ async fn signed_decision(state: State<'_, AppState>, token: String, id: String, 
     Ok(r)
 }
 
+/// Un solo gesto para borrar UNA cosa que crea varias solicitudes (un vídeo con sus Shorts: una por archivo).
+/// Solo aprueba, solo solicitudes de borrado de archivos (`files.delete*`) que el bot tiene pendientes ahora mismo,
+/// como mucho 20, y la acción y la clave se leen del propio bot (no de la interfaz).
+#[tauri::command]
+async fn signed_approve_deletes(state: State<'_, AppState>, token: String, id: String, objetivos: Vec<String>)
+    -> Result<cli::CliResult, String> {
+    state.approver.gesture_finish(&token)?;
+    if objetivos.is_empty() || objetivos.len() > 20 { return Err("hay que aprobar entre 1 y 20 solicitudes".into()); }
+    let m = state.module(&id)?;
+    check_pinned(&m, &state.approver.public_info())?;
+    let pending = m.view()["approvals_pending"].as_array().cloned().unwrap_or_default();
+    let mut signed = Vec::new();
+    for obj in &objetivos {
+        let a = pending.iter().find(|a| a["id"].as_str() == Some(obj.as_str()))
+            .ok_or_else(|| format!("la solicitud {obj} ya no está pendiente"))?;
+        let accion = a["action"].as_str().unwrap_or_default();
+        if !accion.starts_with("files.delete") { return Err(format!("{obj} no es un borrado de archivos")); }
+        signed.push(state.approver.sign(&m.id, "approve", obj, Some(accion.to_string()),
+                                        a["key"].as_str().map(String::from), chrono::Utc::now())?);
+    }
+    let dir = state.data_dir.clone();
+    let (name, bot, n) = (m.name(), m.id.clone(), signed.len());
+    let r = tauri::async_runtime::spawn_blocking(move || -> Result<cli::CliResult, String> {
+        let mut last = None;
+        for s in &signed {
+            let r = deliver_signed(&m, &dir, s)?;
+            if !r.ok { return Ok(r); }
+            last = Some(r);
+        }
+        last.ok_or_else(|| "nada que aprobar".to_string())
+    }).await.map_err(|e| e.to_string())??;
+    state.journal.add("aprobacion", Some(&bot), &format!("{name}: borrado aprobado desde Lirio ({n} archivo{})",
+                                                          if n == 1 { "" } else { "s" }), r.ok);
+    Ok(r)
+}
+
 /// Antes de firmar: ¿es la llave de ESTE Lirio la que el bot tiene fijada? Si no, no se firma y se explica por qué
 /// (en lugar del críptico "la firma no es válida" del bot). La llave fijada nunca la cambia Lirio: solo el usuario.
 fn check_pinned(m: &Module, mine: &approver::PublicKeyInfo) -> Result<(), String> {
@@ -685,7 +721,7 @@ pub fn run() {
             wizard::install_status, wizard::wizard_get, wizard::wizard_save, wizard::wizard_clear, wizard::ai_status, wizard::test_claude,
             wizard::ollama_pull, wizard::ollama_setup, wizard::install_client_secret, wizard::gpu_status, wizard::install_gpu, release_info, check_update, install_update,
             journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions,
-            help_paths, last_session, open_bot_folder, thumbnails
+            help_paths, last_session, open_bot_folder, thumbnails, signed_approve_deletes
         ])
         .build(tauri::generate_context!())
         .expect("error al arrancar Lirio")

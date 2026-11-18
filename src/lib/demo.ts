@@ -155,6 +155,7 @@ export const demo = {
         puede_regenerar: true, miniaturas: [{ archivo: 'v1_miniatura_1.jpg', ruta: 'C:\\o\\v1\\v1_miniatura_1.jpg', puntuacion: 8.2, elegida: true, img: null },
           { archivo: 'v1_miniatura_2.jpg', ruta: 'C:\\o\\v1\\v1_miniatura_2.jpg', puntuacion: 7.1, elegida: false, img: null }] }] } } as T
       case 'open_bot_folder': return undefined as T
+      case 'signed_approve_deletes': return ok as T
       case 'help_paths': return { programa: 'C:\\Users\\Ana\\AppData\\Local\\Lirio', datos: 'C:\\Users\\Ana\\AppData\\Local\\LirioDatos' } as T
       case 'last_session': return { cerrado_de_golpe: false } as T
       case 'gpu_status': return { declara: args?.id === 'twitch-autoeditor', instalado: false, nvidia: true, progreso: null } as T
