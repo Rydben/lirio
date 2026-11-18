@@ -533,11 +533,11 @@ pub fn image_data_url(p: &std::path::Path) -> Option<String> {
     Some(format!("data:{mime};base64,{}", B64.encode(std::fs::read(p).ok()?)))
 }
 
-/// Miniaturas de cada vídeo (`miniaturas-listar` del bot) con la imagen ya leída: Lirio solo lee las que el bot lista.
+/// Miniaturas de cada vídeo (`miniaturas` del editor) con la imagen ya leída: Lirio solo lee las que el bot lista.
 #[tauri::command]
 async fn thumbnails(state: State<'_, AppState>, id: String) -> Result<cli::CliResult, String> {
     let m = state.module(&id)?;
-    let mut cmd = cli::build_command_with_flags(&m, "miniaturas-listar", &serde_json::Map::new())?;
+    let mut cmd = cli::build_command_with_flags(&m, "miniaturas", &serde_json::Map::new())?;
     tauri::async_runtime::spawn_blocking(move || {
         let out = cmd.output().map_err(|e| e.to_string())?;
         let mut r = cli::interpret(out.status.code().unwrap_or(-1), &out.stdout, &out.stderr);
@@ -554,15 +554,15 @@ async fn thumbnails(state: State<'_, AppState>, id: String) -> Result<cli::CliRe
     }).await.map_err(|e| e.to_string())?
 }
 
-/// Abre en el Explorador una carpeta del bot, solo si el propio bot la declara en `papelera-listar` (carpetas).
+/// Abre en el Explorador una carpeta del bot, solo si el propio bot la declara (`carpetas`).
 #[tauri::command]
 async fn open_bot_folder(app: tauri::AppHandle, state: State<'_, AppState>, id: String, ruta: String) -> Result<(), String> {
     let m = state.module(&id)?;
-    let mut cmd = cli::build_command_with_flags(&m, "papelera-listar", &serde_json::Map::new())?;
+    let mut cmd = cli::build_command_with_flags(&m, "carpetas", &serde_json::Map::new())?;
     let out = tauri::async_runtime::spawn_blocking(move || cmd.output()).await.map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
     let r = cli::interpret(out.status.code().unwrap_or(-1), &out.stdout, &out.stderr);
-    let declared = r.data["carpetas"].as_object().is_some_and(|c| c.values().any(|v| v.as_str() == Some(ruta.as_str())));
+    let declared = ["editados", "directos", "miniaturas"].iter().any(|k| r.data[*k].as_str() == Some(ruta.as_str()));
     if !declared { return Err("Esa carpeta no es del bot".into()); }
     use tauri_plugin_opener::OpenerExt;
     app.opener().open_path(&ruta, None::<&str>).map_err(|e| e.to_string())
@@ -681,7 +681,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             overview, module_details, activity, run_command, start_upload, gesture_begin,
             signed_decision, kill_switch_on, kill_switch_off, start_bot, approver_key, start_page,
-            wizard::first_run, wizard::get_catalog, wizard::install_bots, wizard::ai_status, wizard::test_claude,
+            wizard::first_run, wizard::get_catalog, wizard::install_bots, wizard::install_cancel, wizard::install_resume,
+            wizard::install_status, wizard::wizard_get, wizard::wizard_save, wizard::wizard_clear, wizard::ai_status, wizard::test_claude,
             wizard::ollama_pull, wizard::ollama_setup, wizard::install_client_secret, wizard::gpu_status, wizard::install_gpu, release_info, check_update, install_update,
             journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions,
             help_paths, last_session, open_bot_folder, thumbnails
@@ -842,4 +843,30 @@ try:
 except ha.AprobacionInvalida as e:
     out({"ok": False, "error": str(e)}, 7)
 "#;
+}
+
+#[cfg(test)]
+mod editor_real {
+    /// Contra el editor real del creador (solo comandos de lectura). No corre por defecto:
+    /// LIRIO_EDITOR=<carpeta del editor> cargo test editor_real -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn read_only_commands_work() {
+        let dir = std::path::PathBuf::from(std::env::var("LIRIO_EDITOR").expect("LIRIO_EDITOR"));
+        let m = crate::modules::Module::load(&crate::modules::ModuleEntry { ruta: dir, tarea: None }).unwrap();
+        for c in ["carpetas", "estilo", "papelera", "miniaturas"] {
+            let out = crate::cli::build_command_with_flags(&m, c, &serde_json::Map::new()).unwrap().output().unwrap();
+            let r = crate::cli::interpret(out.status.code().unwrap_or(-1), &out.stdout, &out.stderr);
+            println!("{c}: ok={} claves={:?}", r.ok, r.data.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()));
+            assert!(r.ok, "{c}: {}", r.message);
+            if c == "miniaturas" {
+                let first = r.data["videos"][0]["miniaturas"][0]["ruta"].as_str().map(std::path::PathBuf::from);
+                if let Some(p) = first {
+                    let img = super::image_data_url(&p);
+                    println!("imagen {}: {}", p.display(), img.as_ref().map(|s| s.len()).unwrap_or(0));
+                    assert!(img.is_some());
+                }
+            }
+        }
+    }
 }

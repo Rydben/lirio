@@ -166,7 +166,13 @@ impl Module {
                 }
             }
         }
-        let missing = self.missing_files();
+        let installing = self.dir.join(crate::installer::INSTALL_MARK).exists();
+        if installing {
+            let running = self.dir.file_name().is_some_and(|n| crate::wizard::is_installing(&n.to_string_lossy()));
+            state = if running { "installing" } else { "install_pending" }.into();
+            note = Some(if running { "instalándose" } else { "la instalación no terminó: puedes continuarla" });
+        }
+        let missing = if installing { vec![] } else { self.missing_files() };
         if !missing.is_empty() {
             state = "files_missing".into();
             note = Some("faltan archivos del bot: puede que el antivirus los haya puesto en cuarentena");
@@ -193,6 +199,7 @@ impl Module {
             "stop_requested": stop_requested,
             "icon": icon_data_url(&self.dir, &self.manifest),
             "missing_files": missing,
+            "installing": installing,
         })
     }
 }

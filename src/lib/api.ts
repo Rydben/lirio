@@ -7,7 +7,7 @@ import { demo } from './demo'
 
 export type BotState =
   | 'idle' | 'running' | 'watching' | 'waiting' | 'needs_login' | 'stopped' | 'error' | 'crashed'
-  | 'on_demand' | 'unknown' | 'stalled' | 'files_missing'
+  | 'on_demand' | 'unknown' | 'stalled' | 'files_missing' | 'installing' | 'install_pending'
 
 export interface Approval {
   id: string
@@ -35,6 +35,7 @@ export interface BotView {
   stop_requested: boolean
   state_note?: string | null
   missing_files?: string[]
+  installing?: boolean
   pinned_key?: { id: string; llave_publica: string } | null
   icon?: string | null
 }
@@ -107,17 +108,23 @@ export interface UploadEvent {
   result?: CliResult
 }
 
+export interface WizardProgress { paso: string; ids: string[]; respuestas: Answers }
+
 export interface CatalogBot {
   id: string
   nombre: string
   descripcion: string
   version: string
   incluye?: { id: string; nombre: string }[]
+  padre?: string | null
   bytes: number
   modelos?: { nombre: string }[]
 }
 
 export interface InstallEvent {
+  bot?: string
+  terminado?: boolean
+  cancelado?: boolean
   step?: { bot: string; paso: string; detalle: string; percent: number | null }
   hecho?: boolean
   ok?: boolean
@@ -215,6 +222,12 @@ export const api = {
   firstRun: () => call<boolean>('first_run'),
   catalog: () => call<{ bots: CatalogBot[]; nvidia: boolean }>('get_catalog'),
   installBots: (ids: string[], answers: Answers) => call<void>('install_bots', { ids, answers }),
+  installCancel: (id: string) => call<boolean>('install_cancel', { id }),
+  installResume: (id: string) => call<void>('install_resume', { id }),
+  installStatus: () => call<Record<string, { en_marcha: boolean; pendiente: boolean; ultimo: any }>>('install_status'),
+  wizardGet: () => call<WizardProgress | null>('wizard_get'),
+  wizardSave: (progreso: WizardProgress) => call<void>('wizard_save', { progreso }),
+  wizardClear: () => call<void>('wizard_clear'),
   thumbnails: (id: string) => call<CliResult>('thumbnails', { id }),
   openBotFolder: (id: string, ruta: string) => call<void>('open_bot_folder', { id, ruta }),
   pickFile: (title: string, kind: 'video' | 'miniatura') =>

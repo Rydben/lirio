@@ -54,8 +54,11 @@ pub fn build_command_with_flags(m: &Module, command: &str, flags: &serde_json::M
 fn command_for(m: &Module, command: &str, args: &[String]) -> Result<Command, String> {
     let common = matches!(command, "approvals" | "doctor" | "upload" | "auth" | "hold" | "voz-texto" | "voz-dispositivos"
                                    | "ajustes-esquema" | "ajustes" | "ajustes-guardar" | "estadisticas" | "registrar-voz"
-                                   | "probar-voz" | "ultimo-directo" | "bans-recientes");
-    // los comandos nuevos (papelera, miniaturas, estilo) solo si el bot los declara en su manifiesto
+                                   | "probar-voz" | "ultimo-directo" | "bans-recientes"
+                                   // miniaturas, papelera y estilo del editor (no están en su manifiesto, que es protegido)
+                                   | "miniaturas" | "miniatura-elegir" | "miniaturas-generar" | "papelera" | "carpetas"
+                                   | "papelera-borrar" | "estilo" | "estilo-chat" | "estilo-instruccion" | "estilo-borrar"
+                                   | "estilo-video" | "estilo-miniatura");
     if !m.has_command(command) && !common {
         return Err(format!("{} no tiene el comando '{command}'", m.name()));
     }

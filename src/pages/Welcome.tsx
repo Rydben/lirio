@@ -4,8 +4,9 @@ import { AiChooser } from '../components/AiChooser'
 import { Avatar } from '../components/Avatar'
 import { LirioLogo } from '../components/LirioLogo'
 import { YouTubeGuide } from '../components/YouTubeGuide'
-import { Icon, ProgressBar } from '../components/ui'
-import { api, type Answers, type CatalogBot, type InstallEvent } from '../lib/api'
+import { InstallRow, useInstalls } from '../components/InstallProgress'
+import { Icon } from '../components/ui'
+import { api, type Answers, type CatalogBot } from '../lib/api'
 import type { Expression } from '../lib/mood'
 
 const STEPS = ['Hola', 'Tú', 'Bots', 'IA', 'Instalar', 'YouTube', 'Listo'] as const
@@ -21,27 +22,21 @@ export function Welcome({ onFinish }: { onFinish: () => void }) {
   const [catalog, setCatalog] = useState<CatalogBot[] | null>(null)
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [chosen, setChosen] = useState<string[]>([])
-  const [log, setLog] = useState<Record<string, InstallEvent['step']>>({})
-  const [result, setResult] = useState<{ ok: boolean; error?: string | null } | null>(null)
+  const [resumed, setResumed] = useState(false)
 
   useEffect(() => {
     api.catalog().then((c) => {
       setCatalog(c.bots)
-      setChosen(c.bots.map((b) => b.id))
+      setChosen((prev) => (prev.length ? prev : c.bots.map((b) => b.id)))
     }).catch((e) => setCatalogError(String(e)))
-  }, [])
-
-  useEffect(() => {
-    const un = api.onInstall((e) => {
-      // sin porcentaje (p. ej. «instalando…»), se mantiene el último del mismo paso en vez de volver a 0
-      if (e.step) setLog((l) => {
-        const prev = l[e.step!.bot]
-        const percent = e.step!.percent ?? (prev?.paso === e.step!.paso ? prev.percent : null)
-        return { ...l, [e.step!.bot]: { ...e.step!, percent } }
-      })
-      if (e.hecho) setResult({ ok: !!e.ok, error: e.error })
-    })
-    return () => { un.then((f) => f()) }
+    // ¿Lirio se cerró a medias? Se vuelve al mismo paso con las mismas respuestas.
+    api.wizardGet().then((p) => {
+      if (!p?.paso || !STEPS.includes(p.paso as Step)) return
+      setAnswers(p.respuestas)
+      setChosen(p.ids)
+      setStep(p.paso as Step)
+      setResumed(true)
+    }).catch(() => {})
   }, [])
 
   const set = (patch: Partial<Answers>) => setAnswers((a) => ({ ...a, ...patch }))
@@ -51,12 +46,37 @@ export function Welcome({ onFinish }: { onFinish: () => void }) {
   const back = () => setStep(STEPS[Math.max(idx - 1, 0)])
   const hasEditor = chosen.includes('twitch-autoeditor')
 
-  const install = () => {
-    setStep('Instalar')
-    setResult(null)
-    setLog({})
-    api.installBots(chosen, { ...answers, nombre_canal: answers.nombre_canal || answers.canal_twitch })
+  // Los bots que se instalan (los sub-bots, como el de miniaturas, vienen dentro de su bot principal)
+  const mainIds = chosen.filter((id) => !catalog?.find((b) => b.id === id)?.padre)
+  const installs = useInstalls(mainIds)
+  const allOk = mainIds.length > 0 && mainIds.every((id) => installs[id]?.ok)
+  const anyRunning = mainIds.some((id) => installs[id]?.running)
+
+  // Al retomar el paso «Instalar», sigue con lo que no terminó (aprovechando lo descargado)
+  useEffect(() => {
+    if (!resumed || step !== 'Instalar') return
+    api.installStatus().then((s) => {
+      for (const id of mainIds) if (!s[id]?.en_marcha && !s[id]?.ultimo?.ok) api.installResume(id).catch(() => {})
+    }).catch(() => {})
+    setResumed(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumed, step])
+
+  // A partir de «Instalar» se guarda el paso, para volver a él si Lirio se cierra
+  const go = (to: Step) => {
+    setStep(to)
+    if (STEPS.indexOf(to) >= STEPS.indexOf('Instalar')) api.wizardSave({ paso: to, ids: chosen, respuestas: answers }).catch(() => {})
   }
+
+  const install = () => {
+    const respuestas = { ...answers, nombre_canal: answers.nombre_canal || answers.canal_twitch }
+    setAnswers(respuestas)
+    setStep('Instalar')
+    api.wizardSave({ paso: 'Instalar', ids: chosen, respuestas }).catch(() => {})
+    api.installBots(mainIds, respuestas)
+  }
+
+  const finish = () => { api.wizardClear().catch(() => {}); onFinish() }
 
   return (
     <div className="welcome">
@@ -65,7 +85,7 @@ export function Welcome({ onFinish }: { onFinish: () => void }) {
         <ol className="welcome__steps">
           {STEPS.map((s, i) => <li key={s} className={i === idx ? 'is-active' : i < idx ? 'is-done' : ''}>{s}</li>)}
         </ol>
-        <div className="welcome__avatar"><Avatar expression={FACE[step]} height={260} working={step === 'Instalar' && !result} /></div>
+        <div className="welcome__avatar"><Avatar expression={FACE[step]} height={260} working={step === 'Instalar' && anyRunning} /></div>
       </aside>
 
       <main className="welcome__main" data-tauri-drag-region>
@@ -139,23 +159,23 @@ export function Welcome({ onFinish }: { onFinish: () => void }) {
 
         {step === 'Instalar' && (
           <section className="welcome__card">
-            <h1>{result?.ok ? '¡Instalado!' : result ? 'Algo ha fallado' : 'Instalando…'}</h1>
+            <h1>{allOk ? '¡Instalado!' : anyRunning ? 'Instalando…' : 'Instalación sin terminar'}</h1>
+            <p className="muted small">Cada bot se instala por su lado: si uno tarda o falla, los demás siguen.</p>
             <div className="stack">
-              {chosen.map((id) => {
-                const s = log[id]
-                const name = catalog?.find((b) => b.id === id)?.nombre ?? id
-                return (
-                  <div key={id} className="install-row">
-                    <div className="cell-title">{name}</div>
-                    <div className="muted small">{s?.detalle ?? 'En espera…'}</div>
-                    <ProgressBar percent={s?.paso === 'listo' ? 100 : s?.percent ?? 0} label={name} />
-                  </div>
-                )
-              })}
+              {mainIds.map((id) => (
+                <InstallRow key={id} id={id} name={catalog?.find((b) => b.id === id)?.nombre ?? id} s={installs[id]} />
+              ))}
             </div>
-            {result && !result.ok && <p className="error-text">{result.error}</p>}
-            {result && !result.ok && <div className="row"><button className="btn btn--primary" onClick={install}>Reintentar</button></div>}
-            {result?.ok && <div className="row"><button className="btn btn--primary" onClick={() => setStep(hasEditor ? 'YouTube' : 'Listo')}>Seguir <Icon name="arrow" size={16} /></button></div>}
+            <div className="row">
+              {allOk ? (
+                <button className="btn btn--primary" onClick={() => go(hasEditor ? 'YouTube' : 'Listo')}>Seguir <Icon name="arrow" size={16} /></button>
+              ) : (
+                <>
+                  <button className="btn btn--ghost" onClick={() => go(hasEditor ? 'YouTube' : 'Listo')}>Saltar por ahora <Icon name="arrow" size={16} /></button>
+                  <span className="muted small">La instalación sigue sola. La verás (y podrás continuarla) en la página de cada bot.</span>
+                </>
+              )}
+            </div>
           </section>
         )}
 
@@ -163,8 +183,8 @@ export function Welcome({ onFinish }: { onFinish: () => void }) {
           <section className="welcome__card">
             <h1>Conecta tu YouTube</h1>
             <p className="muted">Para subir vídeos a <b>tu</b> canal, Google pide que tengas tu propio «proyecto» (gratis). Te guío paso a paso: unos 10 minutos.</p>
-            <YouTubeGuide botId="twitch-autoeditor" onDone={next} />
-            <div className="row"><button className="btn btn--ghost" onClick={next}>Hacerlo más tarde</button></div>
+            <YouTubeGuide botId="twitch-autoeditor" onDone={() => go('Listo')} />
+            <div className="row"><button className="btn btn--ghost" onClick={() => go('Listo')}>Hacerlo más tarde</button></div>
           </section>
         )}
 
@@ -172,7 +192,7 @@ export function Welcome({ onFinish }: { onFinish: () => void }) {
           <section className="welcome__card">
             <h1>¡Todo listo, <span className="accent">{answers.nombre || 'amigo'}</span>!</h1>
             <p>Tus bots ya están en Lirio. Desde allí los arrancas, ves lo que hacen y apruebas lo importante manteniendo pulsado un botón.</p>
-            <div className="row"><button className="btn btn--primary" onClick={onFinish}>Ir a Lirio <Icon name="arrow" size={16} /></button></div>
+            <div className="row"><button className="btn btn--primary" onClick={finish}>Ir a Lirio <Icon name="arrow" size={16} /></button></div>
           </section>
         )}
       </main>

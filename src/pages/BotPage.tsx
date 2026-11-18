@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ApprovalCard, useSignedDecision } from '../components/Approvals'
 import { ChatPanel } from '../components/ChatPanel'
 import { GpuPanel } from '../components/GpuPanel'
+import { InstallPanel } from '../components/InstallProgress'
 import { StylePanel } from '../components/StylePanel'
 import { ThumbnailsPanel } from '../components/ThumbnailsPanel'
 import { TrashPanel } from '../components/TrashPanel'
@@ -41,12 +42,27 @@ function useCapabilities(bot: BotView | undefined) {
   return caps
 }
 
+/** ¿El editor tiene ya miniaturas, papelera y estilo? (no van en su manifiesto: se le pregunta con `carpetas`).
+ *  En la página del bot de miniaturas se pregunta a su bot principal, que es quien tiene esos comandos. */
+function useEditorPages(bot: BotView | undefined) {
+  const target = bot?.parent ?? bot?.id
+  const [ok, setOk] = useState(false)
+  useEffect(() => {
+    if (!target) return
+    let alive = true
+    api.runWith(target, 'carpetas').then((r) => { if (alive) setOk(!!r.ok && !!r.data?.editados) }).catch(() => {})
+    return () => { alive = false }
+  }, [target])
+  return { ok, target: target ?? '' }
+}
+
 export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
   const { overview } = useStore()
   const [tab, setTab] = useState<BotTab>(initialTab ?? 'resumen')
   const [details, setDetails] = useState<Details | null>(null)
   const bot = overview?.modules.find((m) => m.id === id)
   const caps = useCapabilities(bot)
+  const editor = useEditorPages(bot)
 
   const load = useCallback(() => api.details(id).then(setDetails).catch(() => setDetails(null)), [id])
   useEffect(() => {
@@ -59,14 +75,15 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
   const isVideo = bot.id === 'twitch-autoeditor'
   const hasTwitch = bot.commands.includes('connect')
   const base = isVideo ? VIDEO_TABS : OTHER_TABS
-  // Pestañas que aparecen solo si el bot declara el comando (las páginas nuevas las sirve el propio bot)
-  const has = (c: string) => bot.commands.includes(c)
-  const styleKind = has('referencia-miniatura') ? 'miniatura' : 'video'
+  // Páginas nuevas del editor: en el editor, «Tu estilo» (vídeo) y «Papelera»; en el bot de miniaturas,
+  // «Miniaturas» y «Tu estilo» (miniatura). Todas usan los comandos del editor.
+  const isThumb = !!bot.parent
+  const styleKind = isThumb ? 'miniatura' : 'video'
   const tabs: [BotTab, string][] = [
     ...base.slice(0, -1),
-    ...(has('miniaturas-listar') ? [['miniaturas', 'Miniaturas'] as [BotTab, string]] : []),
-    ...(has('estilo-chat') ? [['estilo', 'Tu estilo'] as [BotTab, string]] : []),
-    ...(has('papelera-listar') ? [['papelera', 'Papelera'] as [BotTab, string]] : []),
+    ...(editor.ok && isThumb ? [['miniaturas', 'Miniaturas'] as [BotTab, string]] : []),
+    ...(editor.ok ? [['estilo', 'Tu estilo'] as [BotTab, string]] : []),
+    ...(editor.ok && !isThumb ? [['papelera', 'Papelera'] as [BotTab, string]] : []),
     ...(hasTwitch ? [['chat', 'Chat'] as [BotTab, string], ['twitch', 'Twitch'] as [BotTab, string]] : []),
     ...(caps.voz ? [['voz', 'Huella de voz'] as [BotTab, string]] : []),
     base[base.length - 1],
@@ -96,9 +113,9 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
         )}
         {tab === 'estadisticas' && <Insights botId={bot.id} />}
         {tab === 'chat' && <ChatPanel botId={bot.id} />}
-        {tab === 'miniaturas' && <ThumbnailsPanel botId={bot.id} />}
-        {tab === 'estilo' && <StylePanel botId={bot.id} kind={styleKind} />}
-        {tab === 'papelera' && <TrashPanel botId={bot.id} />}
+        {tab === 'miniaturas' && <ThumbnailsPanel botId={editor.target} />}
+        {tab === 'estilo' && <StylePanel botId={editor.target} kind={styleKind} />}
+        {tab === 'papelera' && <TrashPanel botId={editor.target} goSettings={() => setTab('ajustes')} />}
         {tab === 'twitch' && (
           <div className="grid-2">
             <section className="panel"><h3>Cuenta del bot</h3><TwitchConnect botId={bot.id} /></section>
@@ -254,6 +271,7 @@ function Summary({ bot, details }: { bot: BotView; details: Details | null }) {
         {details?.quota && <QuotaLine quota={details.quota} />}
       </section>
       )}
+      {bot.installing && <InstallPanel botId={bot.id} name={bot.name} />}
       <GpuPanel botId={bot.id} />
     </div>
   )

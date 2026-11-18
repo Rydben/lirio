@@ -223,6 +223,11 @@ pub fn fetch_all(mut items: Vec<Item>, workers: usize, mut on_progress: impl FnM
             };
             let current = active.lock().unwrap().iter().max_by_key(|(_, s)| *s).map(|(n, _)| n.clone()).unwrap_or_default();
             on_progress(&Progress { done_bytes: b, total_bytes, done_items: done.load(Ordering::Relaxed), total_items, speed, current });
+            // cancelar desde Lirio: las descargas a medias se quedan en .part para seguir luego
+            if crate::installer::is_cancelled() && !cancel.load(Ordering::Relaxed) {
+                cancel.store(true, Ordering::Relaxed);
+                error.lock().unwrap().get_or_insert(crate::installer::CANCELLED.into());
+            }
             if finished.load(Ordering::Relaxed) == workers { break; }
             std::thread::sleep(Duration::from_millis(500));
         }

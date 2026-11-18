@@ -15,7 +15,8 @@ pub const CLIENT_SECRET_REL: &str = "secrets/client_secret.json";
 /// ¿Es la primera vez? (no hay bots configurados)
 #[tauri::command]
 pub fn first_run(state: State<AppState>) -> bool {
-    !state.config_path.exists() || state.config().modulos.is_empty()
+    // también si el asistente se quedó a medias (Lirio se cerró en "Instalar"): se retoma
+    !state.config_path.exists() || state.config().modulos.is_empty() || !wizard_progress(&state.data_dir).is_null()
 }
 
 #[tauri::command]
@@ -24,63 +25,190 @@ pub async fn get_catalog() -> Result<Value, String> {
     Ok(json!({ "bots": cat.bots, "nvidia": installer::has_nvidia() }))
 }
 
-/// Instala los bots elegidos en segundo plano. Emite `lirio://instalacion` con cada paso y, al final, `hecho`.
+// ------------------------------------------------------------------ Instalación de bots
+// Cada bot se instala en su propio hilo: si uno falla o tarda, los demás terminan igual. Se puede cancelar,
+// reintentar y "saltar por ahora" (la instalación sigue sola y se ve en la página del bot). Si Lirio se cierra a
+// medias, al volver se retoma aprovechando lo ya descargado (los .part de las descargas y los pasos ya hechos).
+
+/// Instalaciones en marcha: bot -> bandera de cancelar. Y el último paso de cada una (para la página del bot).
+pub static RUNNING: std::sync::LazyLock<std::sync::Mutex<std::collections::BTreeMap<String, std::sync::Arc<std::sync::atomic::AtomicBool>>>> =
+    std::sync::LazyLock::new(Default::default);
+pub static LAST: std::sync::LazyLock<std::sync::Mutex<std::collections::BTreeMap<String, Value>>> =
+    std::sync::LazyLock::new(Default::default);
+/// config.json lo escriben varios hilos: de uno en uno.
+static CONFIG_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+pub fn is_installing(id: &str) -> bool {
+    RUNNING.lock().unwrap().contains_key(id)
+}
+
+/// Lo necesario para lanzar instalaciones desde cualquier comando.
+#[derive(Clone)]
+struct Ctx {
+    app: tauri::AppHandle,
+    data_dir: PathBuf,
+    config_path: PathBuf,
+    use_defaults: bool,
+    approver_public: Value,
+}
+
+impl Ctx {
+    fn new(app: tauri::AppHandle, state: &AppState) -> Self {
+        Ctx { app, data_dir: state.data_dir.clone(), config_path: state.config_path.clone(), use_defaults: state.use_defaults,
+              approver_public: serde_json::to_value(state.approver.public_info()).unwrap() }
+    }
+
+    fn emit(&self, v: Value) { let _ = self.app.emit("lirio://instalacion", v); }
+
+    /// Añade el bot (y sus sub-bots) a Lirio, aunque la instalación no haya terminado: así aparece su página
+    /// con "Continuar la instalación".
+    fn register(&self, dir: &Path, usuario: Option<&str>) {
+        let _g = CONFIG_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let mut cfg = LirioConfig::load_with(&self.config_path, self.use_defaults);
+        if let Some(u) = usuario.filter(|s| !s.is_empty()) { if cfg.usuario.is_none() { cfg.usuario = Some(u.to_string()); } }
+        let mut dirs = vec![dir.to_path_buf()];
+        dirs.extend(nested_modules(dir));
+        for d in dirs {
+            if !cfg.modulos.iter().any(|m| m.ruta == d) { cfg.modulos.push(ModuleEntry { ruta: d, tarea: None }); }
+        }
+        let _ = cfg.save(&self.config_path);
+    }
+
+    fn registered(&self, dir: &Path) -> bool {
+        LirioConfig::load_with(&self.config_path, self.use_defaults).modulos.iter().any(|m| m.ruta == dir)
+    }
+
+    /// Lanza (o retoma) la instalación de un bot en su hilo. No hace nada si ya está en marcha.
+    fn start(&self, id: String, answers: Value) {
+        let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        {
+            let mut running = RUNNING.lock().unwrap();
+            if running.contains_key(&id) { return; }
+            running.insert(id.clone(), flag.clone());
+        }
+        let ctx = self.clone();
+        std::thread::spawn(move || {
+            let journal = crate::journal::Journal::new(&ctx.data_dir);
+            let bots_root = ctx.data_dir.join("bots");
+            let cache = ctx.data_dir.join("descargas");
+            let dir = bots_root.join(&id);
+            // la marca guarda las respuestas para poder retomarla aunque se cierre Lirio
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(dir.join(installer::INSTALL_MARK), serde_json::to_vec(&json!({"respuestas": answers})).unwrap());
+            let result = installer::with_cancel(flag, || -> Result<PathBuf, String> {
+                let (cat, base) = catalog::fetch()?;
+                let entry = cat.bots.iter().find(|b| b.id == id).ok_or(format!("{id} no está en el catálogo"))?;
+                let job = installer::InstallJob { entry, base: &base, bots_root: &bots_root, cache: &cache,
+                                                  approver_public: ctx.approver_public.clone(), answers: &answers };
+                installer::install_bot(&job, &mut |s| {
+                    let v = json!({"step": s});
+                    LAST.lock().unwrap().insert(id.clone(), v.clone());
+                    // en cuanto el paquete está descomprimido, el bot ya aparece en Lirio
+                    if s.paso != "paquete" && dir.join("aniuzka.json").exists() && !ctx.registered(&dir) { ctx.register(&dir, answers["nombre"].as_str()); }
+                    ctx.emit(v);
+                })
+            });
+            RUNNING.lock().unwrap().remove(&id);
+            let cancelled = result.as_ref().err().is_some_and(|e| e == installer::CANCELLED);
+            if dir.join("aniuzka.json").exists() { ctx.register(&dir, answers["nombre"].as_str()); }
+            match &result {
+                Ok(_) => { let _ = std::fs::remove_file(dir.join(installer::INSTALL_MARK)); }
+                Err(_) if !dir.join("aniuzka.json").exists() && cancelled => { let _ = std::fs::remove_dir_all(&dir); }
+                Err(_) => {}
+            }
+            let end = json!({"bot": id, "terminado": true, "ok": result.is_ok(), "cancelado": cancelled,
+                             "error": result.as_ref().err().filter(|_| !cancelled)});
+            LAST.lock().unwrap().insert(id.clone(), end.clone());
+            journal.add("instalacion", Some(&id), &if result.is_ok() { format!("{id} instalado") }
+                        else if cancelled { format!("{id}: instalación cancelada") } else { format!("{id}: la instalación no terminó") },
+                        result.is_ok());
+            ctx.emit(end);
+            // Después, sin bloquear a nadie: las librerías de la gráfica NVIDIA (si hay una y el bot las usa).
+            if result.is_ok() && dir.join("requirements-gpu.txt").exists() && installer::has_nvidia() {
+                let r = installer::install_gpu(&id, &dir, &cache, &mut |v| { let _ = ctx.app.emit("lirio://gpu", v); });
+                journal.add("gpu", Some(&id), "Librerías de la gráfica NVIDIA", r.is_ok());
+            }
+        });
+    }
+}
+
+/// Instala los bots elegidos, cada uno por su lado. Emite `lirio://instalacion` con `{step}` y, al terminar cada
+/// bot, `{bot, terminado, ok, cancelado, error}`.
 #[tauri::command]
 pub fn install_bots(app: tauri::AppHandle, state: State<AppState>, ids: Vec<String>, answers: Value) -> Result<(), String> {
-    let approver_public = serde_json::to_value(state.approver.public_info()).unwrap();
-    let data_dir = state.data_dir.clone();
-    let config_path = state.config_path.clone();
-    let journal = crate::journal::Journal::new(&state.data_dir);
-    let use_defaults = state.use_defaults;
-    std::thread::spawn(move || {
-        let emit = |v: Value| { let _ = app.emit("lirio://instalacion", v); };
-        let result = (|| -> Result<Vec<ModuleEntry>, String> {
-            let (cat, base) = catalog::fetch()?;
-            let bots_root = data_dir.join("bots");
-            let cache = data_dir.join("descargas");
-            let mut entries = Vec::new();
-            for id in &ids {
-                let entry = cat.bots.iter().find(|b| &b.id == id).ok_or(format!("{id} no está en el catálogo"))?;
-                if entry.padre.is_some() { continue; } // los sub-bots vienen dentro de su bot principal
-                let job = installer::InstallJob { entry, base: &base, bots_root: &bots_root, cache: &cache,
-                                                  approver_public: approver_public.clone(), answers: &answers };
-                let dir = installer::install_bot(&job, &mut |s| emit(json!({"step": s})))?;
-                entries.push(ModuleEntry { ruta: dir.clone(), tarea: None });
-                for sub in nested_modules(&dir) {
-                    entries.push(ModuleEntry { ruta: sub, tarea: None });
-                }
-            }
-            Ok(entries)
-        })();
-        match result {
-            Ok(entries) => {
-                let mut cfg = LirioConfig::load_with(&config_path, use_defaults);
-                cfg.usuario = answers["nombre"].as_str().filter(|s| !s.is_empty()).map(String::from).or(cfg.usuario);
-                for e in entries {
-                    if !cfg.modulos.iter().any(|m| m.ruta == e.ruta) { cfg.modulos.push(e); }
-                }
-                let saved = cfg.save(&config_path);
-                journal.add("instalacion", None, &format!("Bots instalados: {}", ids.join(", ")), saved.is_ok());
-                emit(json!({"hecho": true, "ok": saved.is_ok(), "error": saved.err()}));
-                // Después, y sin bloquear al amigo: las librerías de la gráfica NVIDIA (si hay una y el bot las usa).
-                if installer::has_nvidia() {
-                    for id in &ids {
-                        let dir = data_dir.join("bots").join(id);
-                        if dir.join("requirements-gpu.txt").exists() {
-                            let r = installer::install_gpu(id, &dir, &data_dir.join("descargas"),
-                                                           &mut |v| { let _ = app.emit("lirio://gpu", v); });
-                            journal.add("gpu", Some(id), "Librerías de la gráfica NVIDIA", r.is_ok());
-                        }
-                    }
-                }
-            }
-            Err(err) => {
-                journal.add("instalacion", None, "La instalación no terminó", false);
-                emit(json!({"hecho": true, "ok": false, "error": err}))
-            }
-        }
-    });
+    let ctx = Ctx::new(app, &state);
+    for id in ids {
+        ctx.start(id, answers.clone());
+    }
     Ok(())
+}
+
+/// Cancela la instalación de un bot (lo descargado se guarda para seguir luego).
+#[tauri::command]
+pub fn install_cancel(id: String) -> bool {
+    RUNNING.lock().unwrap().get(&id).map(|f| f.store(true, std::sync::atomic::Ordering::Relaxed)).is_some()
+}
+
+/// Reintenta o continúa la instalación de un bot con las respuestas que se guardaron al empezarla.
+#[tauri::command]
+pub fn install_resume(app: tauri::AppHandle, state: State<AppState>, id: String) -> Result<(), String> {
+    if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("bot no válido".into());
+    }
+    let mark = state.data_dir.join("bots").join(&id).join(installer::INSTALL_MARK);
+    let answers = std::fs::read_to_string(&mark).ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok()).map(|v| v["respuestas"].clone())
+        .or_else(|| wizard_progress(&state.data_dir)["respuestas"].as_object().map(|o| Value::Object(o.clone())))
+        .unwrap_or_else(|| json!({}));
+    Ctx::new(app, &state).start(id, answers);
+    Ok(())
+}
+
+/// Cómo va cada instalación: en marcha, último paso y si quedó a medias (marca en su carpeta).
+#[tauri::command]
+pub fn install_status(state: State<AppState>) -> Value {
+    let mut out = serde_json::Map::new();
+    let last = LAST.lock().unwrap().clone();
+    let bots_root = state.data_dir.join("bots");
+    let mut ids: Vec<String> = last.keys().cloned().collect();
+    for e in std::fs::read_dir(&bots_root).into_iter().flatten().flatten() {
+        if e.path().join(installer::INSTALL_MARK).exists() { ids.push(e.file_name().to_string_lossy().to_string()); }
+    }
+    ids.sort();
+    ids.dedup();
+    for id in ids {
+        out.insert(id.clone(), json!({
+            "en_marcha": is_installing(&id),
+            "pendiente": bots_root.join(&id).join(installer::INSTALL_MARK).exists(),
+            "ultimo": last.get(&id).cloned().unwrap_or(Value::Null),
+        }));
+    }
+    Value::Object(out)
+}
+
+// ------------------------------------------------------------------ Progreso del asistente
+// Se guarda en qué paso va (y las respuestas) para retomarlo si Lirio se cierra a medias.
+
+pub const WIZARD_FILE: &str = "asistente.json";
+
+pub fn wizard_progress(data_dir: &Path) -> Value {
+    std::fs::read_to_string(data_dir.join(WIZARD_FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null)
+}
+
+#[tauri::command]
+pub fn wizard_get(state: State<AppState>) -> Value {
+    wizard_progress(&state.data_dir)
+}
+
+#[tauri::command]
+pub fn wizard_save(state: State<AppState>, progreso: Value) -> Result<(), String> {
+    std::fs::create_dir_all(&state.data_dir).map_err(|e| e.to_string())?;
+    std::fs::write(state.data_dir.join(WIZARD_FILE), serde_json::to_vec(&progreso).unwrap()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn wizard_clear(state: State<AppState>) {
+    let _ = std::fs::remove_file(state.data_dir.join(WIZARD_FILE));
 }
 
 /// ¿Este bot puede ir más rápido con la gráfica NVIDIA? (y cómo va esa instalación, si está en curso)

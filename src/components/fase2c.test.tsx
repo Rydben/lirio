@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { AntivirusHelp } from './AntivirusHelp'
 import { GpuPanel } from './GpuPanel'
+import { InstallRow } from './InstallProgress'
 import { StylePanel } from './StylePanel'
 import { ThumbnailsPanel } from './ThumbnailsPanel'
 import { TrashPanel } from './TrashPanel'
@@ -17,9 +18,10 @@ describe('papelera', () => {
     const borrar = screen.getAllByRole('button', { name: 'Borrar' })
     expect(borrar).toHaveLength(2)
     borrar.forEach((b) => expect(b).toHaveAttribute('title', expect.stringContaining('2 segundos')))
-    expect(screen.getByRole('button', { name: 'Activar' })).toHaveAttribute('title', expect.stringContaining('2 segundos'))
     expect(screen.getByRole('button', { name: /Abrir Directos/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Abrir nota/ })).toBeNull()
     expect(screen.getByText(/Ocupan 7,3 GB/)).toBeInTheDocument()
+    expect(screen.getByText('3 Shorts', { exact: false })).toBeInTheDocument()
   })
 })
 
@@ -29,6 +31,7 @@ describe('miniaturas', () => {
     expect(await screen.findByText(/Directo del viernes/)).toBeInTheDocument()
     expect(screen.getByText('Elegida')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Usar esta' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Hacer otras/ })).toBeInTheDocument()
   })
 })
 
@@ -39,6 +42,7 @@ describe('tu estilo', () => {
     fireEvent.change(screen.getByLabelText('Mensaje para el editor'), { target: { value: 'cortes más rápidos' } })
     fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
     expect(await screen.findByText(/haré los cortes más rápidos/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Olvidar: Cortes rápidos/ })).toBeInTheDocument()
     expect(screen.getByText('Vídeo de referencia')).toBeInTheDocument()
   })
 })
@@ -66,4 +70,21 @@ it('tamaños con coma decimal', () => {
   expect(human(6_400_000_000)).toBe('6,4 GB')
   expect(human(900_000_000)).toBe('900 MB')
   expect(human(0)).toBe('0,0 KB')
+})
+
+describe('instalación por bot', () => {
+  it('en marcha se puede cancelar; si falla, reintentar; si se pausó, continuar', () => {
+    const step = { bot: 'b', paso: 'librerias', detalle: 'Descargando librerías: 3 de 40 paquetes', percent: 12 }
+    const { rerender } = wrap(<InstallRow id="b" name="Editor" s={{ running: true, step }} />)
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument()
+    expect(screen.getByText(/3 de 40 paquetes/)).toBeInTheDocument()
+    rerender(<ToastProvider><InstallRow id="b" name="Editor" s={{ running: false, ok: false, error: 'sin internet', step }} /></ToastProvider>)
+    expect(screen.getByRole('button', { name: /Reintentar/ })).toBeInTheDocument()
+    expect(screen.getByText(/sin internet/)).toBeInTheDocument()
+    rerender(<ToastProvider><InstallRow id="b" name="Editor" s={{ running: false, ok: false, cancelled: true, step }} /></ToastProvider>)
+    expect(screen.getByRole('button', { name: /Continuar/ })).toBeInTheDocument()
+    rerender(<ToastProvider><InstallRow id="b" name="Editor" s={{ running: false, ok: true }} /></ToastProvider>)
+    expect(screen.getByText('Instalado')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
 })

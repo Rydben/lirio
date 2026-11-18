@@ -15,7 +15,10 @@ pub enum Kind {
     /// Ruta absoluta de Windows (≤ 400). El bot comprueba que esté dentro de sus carpetas.
     Path,
     /// Uno de estos valores
+    #[allow(dead_code)]
     Choice(&'static [&'static str]),
+    /// Lista de rutas absolutas (1 a 50)
+    PathList,
 }
 
 /// (comando, [(opción, tipo)])
@@ -37,28 +40,39 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("estadisticas", &[("--refrescar", Kind::Flag), ("--sin-ia", Kind::Flag)]),
     // permiso extra de solo lectura para leer los comentarios de tus vídeos (abre el navegador de Google)
     ("auth", &[("--comentarios", Kind::Flag)]),
-    // Bot de miniaturas: las de cada vídeo y elegir cuál va con él
-    ("miniaturas-listar", &[]),
-    ("miniatura-elegir", &[("--video", Kind::Text), ("--archivo", Kind::Path)]),
-    // Papelera del editor: borrar SIEMPRE es pedir una solicitud que se aprueba con el gesto (aprobar-firmado)
-    ("papelera-listar", &[]),
-    ("papelera-borrar", &[("--solicitar", Kind::Path)]),
-    ("papelera-auto", &[("--solicitar", Kind::Flag), ("--directos", Kind::Choice(&["on", "off"])),
-                        ("--videos", Kind::Choice(&["on", "off"]))]),
-    // Estilo propio de cada usuario
-    ("estilo-chat", &[("--mensaje", Kind::LongText)]),
-    ("estilo-ver", &[]),
-    ("referencia-video", &[("--archivo", Kind::Path)]),
-    ("referencia-miniatura", &[("--archivo", Kind::Path)]),
+    // Los nombres que empiezan por «@» son argumentos posicionales (se pasan solo con su valor, en este orden).
+    // Miniaturas de cada vídeo (comandos del editor; el bot de miniaturas usa su mismo Python)
+    ("miniaturas", &[("--video", Kind::Text)]),
+    ("miniatura-elegir", &[("@video", Kind::Text), ("@archivo", Kind::Path)]),
+    ("miniaturas-generar", &[("@video", Kind::Text)]),
+    // Papelera: el primer `papelera-borrar` NO borra; crea una solicitud por archivo que se aprueba con el gesto
+    // (aprobar-firmado) y luego se repite. Ninguna IA borra sola.
+    ("papelera", &[]),
+    ("carpetas", &[]),
+    ("papelera-borrar", &[("@rutas", Kind::PathList), ("--carpeta-entera", Kind::Flag)]),
+    // Estilo propio de cada usuario (se guarda como preferencia, sin IA)
+    ("estilo", &[]),
+    ("estilo-chat", &[("@mensaje", Kind::LongText)]),
+    ("estilo-instruccion", &[("@texto", Kind::LongText)]),
+    ("estilo-borrar", &[("@que", Kind::Text)]),
+    ("estilo-video", &[("@archivo", Kind::Path)]),
+    ("estilo-miniatura", &[("@archivo", Kind::Path)]),
 ];
 
 pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<String>, String> {
     let allowed = COMMANDS.iter().find(|(c, _)| *c == command)
         .ok_or_else(|| format!("Lirio no lanza «{command}» con opciones"))?.1;
     let mut out = Vec::new();
+    // los posicionales se ponen primero, en el orden de la lista blanca
+    let mut positional: Vec<(usize, Vec<String>)> = Vec::new();
     for (name, value) in flags {
-        let kind = allowed.iter().find(|(n, _)| n == name).map(|(_, k)| *k)
+        let (idx, kind) = allowed.iter().enumerate().find(|(_, (n, _))| n == name).map(|(i, (_, k))| (i, *k))
             .ok_or_else(|| format!("opción no permitida: {name}"))?;
+        if name.starts_with('@') {
+            let vals = positional_values(name, kind, value)?;
+            if !vals.is_empty() { positional.push((idx, vals)); }
+            continue;
+        }
         match kind {
             Kind::Flag => {
                 if value.as_bool() == Some(true) { out.push(name.clone()); }
@@ -88,7 +102,16 @@ pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<Strin
                 out.push(name.clone());
                 out.push(t.to_string());
             }
+            Kind::PathList => return Err(format!("{name}: una lista solo puede ser posicional")),
         }
+    }
+    positional.sort_by_key(|(i, _)| *i);
+    let mut pos: Vec<String> = positional.into_iter().flat_map(|(_, v)| v).collect();
+    pos.append(&mut out);
+    let mut out = pos;
+    // falta un posicional obligatorio: mejor decirlo aquí que dejar que el bot falle
+    for (n, _) in allowed.iter().filter(|(n, _)| n.starts_with('@')) {
+        if !flags.contains_key(*n) { return Err(format!("falta {}", &n[1..])); }
     }
     // la grabación del editor sin consola: el gesto lo pone el botón de Lirio
     if matches!(command, "registrar-voz" | "enroll") && !out.iter().any(|a| a == "--desde-lirio") {
@@ -98,6 +121,38 @@ pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<Strin
 }
 
 /// `C:\carpeta\archivo` o `\\servidor\carpeta` (sin `..`)
+fn text_ok(name: &str, kind: Kind, t: &str) -> Result<(), String> {
+    let max = match kind { Kind::Text => 80, Kind::LongText => 500, _ => 400 };
+    if t.starts_with('-') || t.chars().count() > max || t.chars().any(|c| c.is_control()) {
+        return Err(format!("valor no permitido para {}", name.trim_start_matches('@')));
+    }
+    if matches!(kind, Kind::Path | Kind::PathList) && !is_absolute_windows_path(t) {
+        return Err(format!("{} debe ser una ruta completa", name.trim_start_matches('@')));
+    }
+    Ok(())
+}
+
+fn positional_values(name: &str, kind: Kind, value: &Value) -> Result<Vec<String>, String> {
+    match kind {
+        Kind::PathList => {
+            let list = value.as_array().filter(|a| !a.is_empty() && a.len() <= 50)
+                .ok_or_else(|| format!("{} debe ser una lista de 1 a 50 rutas", &name[1..]))?;
+            list.iter().map(|v| {
+                let t = v.as_str().unwrap_or("").trim();
+                text_ok(name, kind, t)?;
+                Ok(t.to_string())
+            }).collect()
+        }
+        Kind::Text | Kind::LongText | Kind::Path => {
+            let t = value.as_str().unwrap_or("").trim();
+            if t.is_empty() { return Err(format!("falta {}", &name[1..])); }
+            text_ok(name, kind, t)?;
+            Ok(vec![t.to_string()])
+        }
+        _ => Err(format!("{name}: tipo no admitido como posicional")),
+    }
+}
+
 fn is_absolute_windows_path(t: &str) -> bool {
     let b = t.as_bytes();
     let drive = b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/');
@@ -140,18 +195,21 @@ mod tests {
     }
 
     #[test]
-    fn paths_choices_and_long_messages() {
-        assert_eq!(build_args("papelera-borrar", &m(json!({"--solicitar": "D:\\Vídeos\\directo 1.mp4"}))).unwrap(),
-                   vec!["--solicitar", "D:\\Vídeos\\directo 1.mp4"]);
-        assert!(build_args("papelera-borrar", &m(json!({"--solicitar": "directo.mp4"}))).is_err(), "solo rutas completas");
-        assert!(build_args("papelera-borrar", &m(json!({"--solicitar": "C:\\a\\..\\..\\Windows"}))).is_err());
-        assert!(build_args("papelera-borrar", &m(json!({"--borrar-ya": true}))).is_err(), "borrar sin aprobación no existe");
-        assert_eq!(build_args("papelera-auto", &m(json!({"--solicitar": true, "--directos": "on"}))).unwrap(),
-                   vec!["--solicitar", "--directos", "on"]);
-        assert!(build_args("papelera-auto", &m(json!({"--directos": "siempre"}))).is_err());
-        let long = "a".repeat(300);
-        assert!(build_args("estilo-chat", &m(json!({"--mensaje": long}))).is_ok());
-        assert!(build_args("estilo-chat", &m(json!({"--mensaje": "a".repeat(501)}))).is_err());
+    fn positional_paths_and_long_messages() {
+        assert_eq!(build_args("papelera-borrar", &m(json!({"@rutas": ["D:\\Vídeos\\directo 1.mp4"], "--carpeta-entera": true}))).unwrap(),
+                   vec!["D:\\Vídeos\\directo 1.mp4", "--carpeta-entera"]);
+        assert!(build_args("papelera-borrar", &m(json!({"@rutas": ["directo.mp4"]}))).is_err(), "solo rutas completas");
+        assert!(build_args("papelera-borrar", &m(json!({"@rutas": ["C:\\a\\..\\..\\Windows"]}))).is_err());
+        assert!(build_args("papelera-borrar", &m(json!({"@rutas": ["-rf"]}))).is_err());
+        assert!(build_args("papelera-borrar", &m(json!({"@rutas": []}))).is_err());
+        assert!(build_args("papelera-borrar", &m(json!({}))).is_err(), "sin rutas no se lanza");
+        assert!(build_args("papelera-borrar", &m(json!({"--borrar-ya": true}))).is_err());
+        // el orden de los posicionales es el de la lista blanca, venga como venga
+        assert_eq!(build_args("miniatura-elegir", &m(json!({"@archivo": "C:\\o\\v_miniatura_2.jpg", "@video": "v"}))).unwrap(),
+                   vec!["v", "C:\\o\\v_miniatura_2.jpg"]);
+        assert!(build_args("estilo-chat", &m(json!({"@mensaje": "a".repeat(300)}))).is_ok());
+        assert!(build_args("estilo-chat", &m(json!({"@mensaje": "a".repeat(501)}))).is_err());
+        assert_eq!(build_args("estilo-borrar", &m(json!({"@que": "video"}))).unwrap(), vec!["video"]);
     }
 
     #[test]

@@ -196,23 +196,80 @@ pub fn has_nvidia() -> bool {
     c.status().map(|s| s.success()).unwrap_or(false)
 }
 
-/// Lanza un proceso y entrega cada línea de su salida (para mostrar el avance de pip).
+// ---------- Cancelar una instalación ----------
+// Cada instalación corre en su hilo con su bandera de "cancelar". Las descargas y pip la consultan solas.
+pub const CANCELLED: &str = "cancelado";
+
+thread_local! {
+    static CANCEL: std::cell::RefCell<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Ejecuta `f` en este hilo con esa bandera de cancelar.
+pub fn with_cancel<T>(flag: std::sync::Arc<std::sync::atomic::AtomicBool>, f: impl FnOnce() -> T) -> T {
+    CANCEL.with(|c| *c.borrow_mut() = Some(flag));
+    let r = f();
+    CANCEL.with(|c| *c.borrow_mut() = None);
+    r
+}
+
+pub fn cancel_flag() -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
+    CANCEL.with(|c| c.borrow().clone())
+}
+
+pub fn is_cancelled() -> bool {
+    cancel_flag().is_some_and(|f| f.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+fn check_cancel() -> Result<(), String> {
+    if is_cancelled() { Err(CANCELLED.into()) } else { Ok(()) }
+}
+
+/// Lo que se descarga a la caché compartida (Python, pip) no lo bajan dos instalaciones a la vez.
+static SHARED: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Marca de "instalación sin terminar" dentro de la carpeta del bot (con las respuestas del asistente, para retomarla).
+pub const INSTALL_MARK: &str = ".lirio-instalacion.json";
+
+/// Lanza un proceso y entrega cada línea de su salida (para mostrar el avance de pip). Si la instalación se cancela,
+/// se cierra el proceso (y sus hijos).
 pub fn run_streaming(mut cmd: Command, mut on_line: impl FnMut(&str)) -> Result<(), String> {
+    check_cancel()?;
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::null());
     winutil::hidden(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| format!("no se pudo lanzar: {e}"))?;
+    let pid = child.id();
     let stderr = child.stderr.take().unwrap();
     let err_h = std::thread::spawn(move || {
         let mut s = String::new();
         let _ = std::io::BufReader::new(stderr).read_to_string(&mut s);
         s
     });
+    let finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    if let Some(flag) = cancel_flag() {
+        let finished = finished.clone();
+        std::thread::spawn(move || {
+            use std::sync::atomic::Ordering::Relaxed;
+            while !finished.load(Relaxed) {
+                if flag.load(Relaxed) {
+                    let mut k = Command::new("taskkill");
+                    k.args(["/PID", &pid.to_string(), "/T", "/F"]).stdout(Stdio::null()).stderr(Stdio::null());
+                    winutil::hidden(&mut k);
+                    let _ = k.status();
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(300));
+            }
+        });
+    }
     let out = std::io::BufReader::new(child.stdout.take().unwrap());
     use std::io::BufRead;
     for line in out.lines().map_while(Result::ok) {
         on_line(&line);
     }
-    let status = child.wait().map_err(|e| e.to_string())?;
+    let status = child.wait().map_err(|e| e.to_string());
+    finished.store(true, std::sync::atomic::Ordering::Relaxed);
+    check_cancel()?;
+    let status = status?;
     let err = err_h.join().unwrap_or_default();
     if status.success() { Ok(()) } else {
         let last: Vec<&str> = err.lines().filter(|l| !l.trim().is_empty()).rev().take(3).collect();
@@ -343,6 +400,7 @@ pub fn install_bot(job: &InstallJob, emit: &mut dyn FnMut(Step)) -> Result<PathB
     };
 
     // 1. Paquete del bot (hash del catálogo firmado)
+    check_cancel()?;
     if !dir.join("aniuzka.json").exists() {
         let zip = job.cache.join(&e.archivo);
         say("paquete", format!("Descargando {} ({:.1} MB)", e.nombre, e.bytes as f64 / 1e6), Some(0));
@@ -355,6 +413,8 @@ pub fn install_bot(job: &InstallJob, emit: &mut dyn FnMut(Step)) -> Result<PathB
     let module = manifest["entrypoint"]["module"].as_str().ok_or("manifiesto sin entrypoint.module")?.to_string();
 
     // 2. Python privado del bot
+    check_cancel()?;
+    let shared = SHARED.lock().unwrap_or_else(|p| p.into_inner());
     let py_dir = dir.join(".venv").join("Scripts");
     let python = py_dir.join("python.exe");
     if !python.exists() {
@@ -386,6 +446,8 @@ pub fn install_bot(job: &InstallJob, emit: &mut dyn FnMut(Step)) -> Result<PathB
         extract_zip(&whl, &py_dir.join("Lib").join("site-packages"))?;
     }
 
+    drop(shared);
+
     // 4. Librerías del bot. Las de la gráfica NVIDIA (cuDNN, cuBLAS: GB) van aparte, después, con `install_gpu`:
     //    el bot ya funciona en CPU mientras tanto.
     let req = dir.join("requirements.txt");
@@ -394,6 +456,7 @@ pub fn install_bot(job: &InstallJob, emit: &mut dyn FnMut(Step)) -> Result<PathB
     }
 
     // 5. Modelos (descargados aquí, nunca en el paquete)
+    check_cancel()?;
     for m in &e.modelos {
         let dest = dir.join(&m.destino);
         if dest.exists() { continue; }
@@ -517,6 +580,21 @@ mod tests {
         let answers = json!({"canal_twitch": "pepe", "ia": "ollama", "carpeta_obs": "D:/OBS", "nombre_canal": ""});
         assert_eq!(config_answers(&manifest, &answers), json!({"canal.twitch_login": "pepe", "editorial.backend": "ollama"}));
         assert_eq!(config_answers(&json!({}), &answers), json!({}));
+    }
+
+    #[test]
+    fn cancel_stops_a_running_process_quickly() {
+        use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
+        let flag = Arc::new(AtomicBool::new(false));
+        let f2 = flag.clone();
+        std::thread::spawn(move || { std::thread::sleep(std::time::Duration::from_millis(400)); f2.store(true, Ordering::Relaxed); });
+        let t0 = std::time::Instant::now();
+        let mut c = Command::new("ping");
+        c.args(["-n", "30", "127.0.0.1"]);
+        let r = with_cancel(flag, || run_streaming(c, |_| {}));
+        assert_eq!(r.unwrap_err(), CANCELLED);
+        assert!(t0.elapsed() < std::time::Duration::from_secs(10), "{:?}", t0.elapsed());
+        assert!(!is_cancelled(), "la bandera es solo de ese trabajo");
     }
 
     #[test]

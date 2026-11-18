@@ -435,3 +435,7 @@ input.input:focus, select.input:focus { border-color: var(--cyan); outline: none
 .bubble--tu { align-self: flex-end; background: rgba(124, 58, 237, .35); border-color: rgba(167, 139, 250, .45); }
 .bubble--bot { align-self: flex-start; }
 .bubble ul { margin: 6px 0 0; padding-left: 18px; }
+
+.install-row { display: flex; flex-direction: column; gap: 6px; }
+.install-row__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; }
+.install-row__head .cell-title { display: flex; align-items: center; gap: 6px; }

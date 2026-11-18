@@ -62,7 +62,7 @@ function names(bots: BotView[]) {
 
 const STATE_LABELS: Record<string, string> = {
   idle: 'En reposo', running: 'Trabajando', watching: 'Vigilando', waiting: 'Esperando', needs_login: 'Sin sesión',
-  stopped: 'Parado', error: 'Error', crashed: 'Caído', stalled: 'Atascado', files_missing: 'Faltan archivos', on_demand: 'A demanda', unknown: 'Sin datos',
+  stopped: 'Parado', error: 'Error', crashed: 'Caído', stalled: 'Atascado', files_missing: 'Faltan archivos', installing: 'Instalándose', install_pending: 'Instalación sin terminar', on_demand: 'A demanda', unknown: 'Sin datos',
 }
 
 /** ¿Puede este Lirio firmar aprobaciones para el bot? null = el bot no usa aprobaciones firmadas. */
@@ -86,6 +86,8 @@ export function stateTone(b: BotView): 'ok' | 'working' | 'warning' | 'error' | 
     case 'running': return 'working'
     case 'waiting': case 'needs_login': case 'stopped': case 'stalled': return 'warning'
     case 'files_missing': return 'error'
+    case 'installing': return 'working'
+    case 'install_pending': return 'warning'
     case 'error': case 'crashed': return 'error'
     default: return 'muted'
   }

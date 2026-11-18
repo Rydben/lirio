@@ -8,7 +8,7 @@ function bots(): BotView[] {
     {
       id: 'twitch-autoeditor', name: 'Twitch AutoEditor', version: '0.2.0', dir: 'C:\\demo\\twitch-autoeditor',
       description: 'Convierte cada directo en un vídeo de YouTube editado, Shorts y miniatura.',
-      task: 'TwitchAutoEditorWatch', commands: ['setup', 'run', 'watch', 'stop', 'status', 'aprobar-firmado', 'papelera-listar', 'estilo-chat', 'referencia-video'],
+      task: 'TwitchAutoEditorWatch', commands: ['setup', 'run', 'watch', 'stop', 'status', 'aprobar-firmado', ],
       state: 'watching', stop_active: false, stop_requested: false,
       status: { state: 'watching', current_job: null, warning: null, last_error: null,
         last_job: { source: 'directo_partida.mp4', ok: true, finished_at: now() } },
@@ -19,7 +19,7 @@ function bots(): BotView[] {
     {
       id: 'thumbnail-bot', name: 'Bot de miniaturas', version: '0.1.0', parent: 'twitch-autoeditor',
       dir: 'C:\\demo\\thumbnail', description: 'Genera 2-3 miniaturas y elige la mejor.',
-      commands: ['run', 'miniaturas-listar', 'estilo-chat', 'referencia-miniatura'], state: 'on_demand', status: null, approvals_pending: [], stop_active: false, stop_requested: false,
+      commands: ['run'], state: 'on_demand', status: null, approvals_pending: [], stop_active: false, stop_requested: false,
     },
     {
       id: 'twitch-moderator', name: 'Twitch Moderator', version: '0.1.0', dir: 'C:\\demo\\twitch-moderator',
@@ -62,9 +62,9 @@ const activity = (): ActivityItem[] => [
 
 const ok: CliResult = { ok: true, code: 0, data: { ok: true }, message: 'Hecho (demostración)' }
 let uploadCb: ((e: UploadEvent) => void) | null = null
-const listeners: Record<string, ((e: any) => void) | null> = {}
+const listeners: Record<string, Set<(e: any) => void>> = {}
 const fire = (name: string, steps: any[], ms = 250) =>
-  steps.forEach((s, i) => setTimeout(() => listeners[name]?.(s), ms * (i + 1)))
+  steps.forEach((s, i) => setTimeout(() => listeners[name]?.forEach((cb) => cb(s)), ms * (i + 1)))
 
 /** En el navegador, `?bienvenida` enseña el asistente de primera vez. */
 const welcome = () => typeof location !== 'undefined' && location.search.includes('bienvenida')
@@ -100,14 +100,17 @@ export const demo = {
         if (c === 'ajustes') return { ...ok, data: { valores: { 'canal.nombre': 'Alex', 'edicion.zoom': true, 'edicion.shorts': 3 } } } as T
         if (c === 'probar-voz') return { ...ok, data: { oido: 'lirio pon el modo lento', palabra_activacion: true, es_tu_voz: true,
           similitud: 0.82, comando: 'modo_lento', descripcion: 'Activar el modo lento del chat (30 s)', ejecutado: false } } as T
-        if (c === 'papelera-listar') return { ...ok, data: { carpetas: { directos: 'C:\\v\\directos', editados: 'C:\\v\\editados', miniaturas: 'C:\\v\\miniaturas' },
-          auto: { directos: false, videos: true },
-          directos: [{ ruta: 'C:\\v\\directos\\2026-11-14.mp4', bytes: 6_400_000_000, fecha: now(), estado: 'editado', se_puede_borrar: true }],
-          videos: [{ ruta: 'C:\\v\\editados\\viernes.mp4', bytes: 900_000_000, fecha: now(), subido: true, youtube_id: 'abc' }] } } as T
-        if (c === 'papelera-borrar' || c === 'papelera-auto') return { ...ok, data: { solicitud: { id: 's2', action: 'archivo.borrar', key: 'k', status: 'pending' } } } as T
-        if (c === 'estilo-ver') return { ...ok, data: { reglas: ['Cortes rápidos en las jugadas'] } } as T
-        if (c === 'estilo-chat') return { ...ok, data: { respuesta: 'Hecho: haré los cortes más rápidos.', cambios: ['ritmo: rápido'] } } as T
-        if (c.startsWith('referencia-') || c === 'miniatura-elegir') return { ...ok, data: {} } as T
+        if (c === 'carpetas') return { ...ok, data: { editados: 'C:\\v\\output', directos: 'C:\\v\\downloads', miniaturas: 'C:\\v\\output', nota: 'x' } } as T
+        if (c === 'papelera') return { ...ok, data: {
+          carpetas: { editados: 'C:\\v\\output', directos: 'C:\\v\\downloads', miniaturas: 'C:\\v\\output' },
+          automatica: { borrar_directo_tras_editar: false, borrar_video_tras_subir: true },
+          directos: [{ archivo: '2026-11-14.mp4', ruta: 'C:\\v\\downloads\\2026-11-14.mp4', mb: 6400, fecha: now(), estado: 'editado', se_puede_borrar: true }],
+          editados: [{ carpeta: 'C:\\v\\output\\viernes', nombre: 'viernes', titulo: 'Directo del viernes', mb: 900, shorts: 3, fecha: now(), subido: true }] } } as T
+        if (c === 'papelera-borrar') return { ...ok, data: { ok: true, liberado_mb: 900 } } as T
+        if (c.startsWith('estilo')) return { ...ok, data: { ok: true, respuesta: 'Hecho: haré los cortes más rápidos.',
+          cambios: [{ tipo: 'instruccion', id: 'i2', texto: 'cortes más rápidos' }],
+          instrucciones: [{ id: 'i1', texto: 'Cortes rápidos en las jugadas' }], video_referencia: null, miniatura_referencia: null } } as T
+        if (c === 'miniatura-elegir' || c === 'miniaturas-generar') return { ...ok, data: { ok: true } } as T
         if (c === 'bans-recientes') return { ...ok, data: { bans: [{ id: 'b1', at: now(), login: 'spammer123', reason: 'enlaces',
           message: 'compra seguidores en…', category: 'spam', rule: 'R3', immediate: true, undone: false }] } } as T
         if (c === 'deshacer') return { ...ok, data: { solicitud: { id: 's1', action: 'twitch.unban', key: 'unban:spammer123', status: 'pending' } } } as T
@@ -136,15 +139,21 @@ export const demo = {
             { step: { bot: b, paso: 'librerias', detalle: 'Descargando numpy 15.8 MB', percent: null } },
             { step: { bot: b, paso: 'listo', detalle: 'Instalado', percent: 100 } },
           ]),
-          { hecho: true, ok: true },
+          ...ids.map((b) => ({ bot: b, terminado: true, ok: true })),
         ])
         return undefined as T
       }
+      case 'install_cancel': return true as T
+      case 'install_resume': return undefined as T
+      case 'install_status': return {} as T
+      case 'wizard_get': return null as T
+      case 'wizard_save': case 'wizard_clear': return undefined as T
       case 'ai_status': return { claude: false, ollama_instalado: true, ollama_activo: true, ollama_modelos: [],
         vram_gb: 6, modelo_recomendado: 'qwen2.5:3b' } as T
       case 'test_claude': return { ok: false, motivo: 'no_instalado' } as T
-      case 'thumbnails': return { ...ok, data: { videos: [{ id: 'v1', titulo: 'Directo del viernes', fecha: now(), elegida: 'C:\\m\\a.png',
-        miniaturas: [{ ruta: 'C:\\m\\a.png', puntuacion: 8.2, img: null }, { ruta: 'C:\\m\\b.png', puntuacion: 7.1, img: null }] }] } } as T
+      case 'thumbnails': return { ...ok, data: { videos: [{ carpeta: 'C:\\o\\v1', video: 'v1', titulo: 'Directo del viernes', elegida_por: 'bot',
+        puede_regenerar: true, miniaturas: [{ archivo: 'v1_miniatura_1.jpg', ruta: 'C:\\o\\v1\\v1_miniatura_1.jpg', puntuacion: 8.2, elegida: true, img: null },
+          { archivo: 'v1_miniatura_2.jpg', ruta: 'C:\\o\\v1\\v1_miniatura_2.jpg', puntuacion: 7.1, elegida: false, img: null }] }] } } as T
       case 'open_bot_folder': return undefined as T
       case 'help_paths': return { programa: 'C:\\Users\\Ana\\AppData\\Local\\Lirio', datos: 'C:\\Users\\Ana\\AppData\\Local\\LirioDatos' } as T
       case 'last_session': return { cerrado_de_golpe: false } as T
@@ -179,8 +188,8 @@ export const demo = {
     }
   },
   async on(name: string, cb: (e: any) => void) {
-    listeners[name] = cb
-    return () => { listeners[name] = null }
+    ;(listeners[name] ??= new Set()).add(cb)
+    return () => { listeners[name]?.delete(cb) }
   },
   async onUpload(cb: (e: UploadEvent) => void) {
     uploadCb = cb
