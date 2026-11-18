@@ -3,8 +3,6 @@
 // Ninguna IA borra sola. El borrado automático se cambia en Ajustes (y aun así el editor pide aprobación).
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { useJob } from '../lib/jobs'
-import { JobProgress } from './JobProgress'
 import { HoldButton } from './HoldButton'
 import { Icon, Pill, timeAgo, useToast } from './ui'
 import { human } from './units'
@@ -25,11 +23,18 @@ export function TrashPanel({ botId, goSettings }: { botId: string; goSettings?: 
   const [t, setT] = useState<Trash | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
-  const edit = useJob(botId, 'editar-ahora', (e) => {
-    if (e.ok) toast('ok', e.resultado?.mensaje ?? 'Editando: lo verás en Resumen.')
-    else if (!e.cancelado) toast('error', e.resultado?.error ?? e.mensaje ?? 'No se pudo')
+  /** Lo pone a editar (o a la cola del watcher). Vuelve enseguida; el avance se ve en Resumen. */
+  const editNow = async (ruta: string) => {
+    setEditing(ruta)
+    const r = await api.runWith(botId, 'editar', { '@que': ruta })
+    setEditing(null)
+    const d = r.data ?? {}
+    if (d.ya_en_marcha) toast('info', 'Ya se está editando: míralo en Resumen.')
+    else if (d.ya_editado) toast('info', 'Ese directo ya está editado.')
+    else toast(r.ok ? 'ok' : 'error', r.ok ? (d.mensaje ?? (d.modo === 'cola' ? 'En cola: el editor lo coge en su próxima vuelta.' : 'Editando: míralo en Resumen.'))
+      : d.error ?? r.message)
     load()
-  })
+  }
 
   const load = useCallback(() => {
     api.runWith(botId, 'papelera').then((r) => {
@@ -102,14 +107,12 @@ export function TrashPanel({ botId, goSettings }: { botId: string; goSettings?: 
                   </div>
                   <div className="row">
                     {(d.estado === 'pendiente' || d.estado === 'en_espera') && (
-                      <button className="btn btn--primary" disabled={edit.running}
-                        onClick={() => { setEditing(d.ruta); edit.start({ '@ruta': d.ruta }) }}>
-                        <Icon name="play" size={16} /> {edit.running && editing === d.ruta ? 'Editando…' : 'Editar ahora'}
+                      <button className="btn btn--primary" disabled={editing !== null} onClick={() => editNow(d.ruta)}>
+                        <Icon name="play" size={16} /> {editing === d.ruta ? 'Un momento…' : 'Editar ahora'}
                       </button>
                     )}
                     {hold(d.ruta, d.archivo, d.estado === 'editando')}
                   </div>
-                  {editing === d.ruta && <JobProgress job={edit.job} label="Editando" onCancel={edit.cancel} />}
                 </li>
               ))}
             </ul>

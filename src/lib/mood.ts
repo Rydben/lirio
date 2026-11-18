@@ -49,7 +49,7 @@ export function moodFor(bots: BotView[], uploading = false): Mood {
   if (idle.length) {
     const st = stalledInput(idle[0])!
     return { expression: 'confundido', level: 'warning', title: 'El editor no avanza',
-      detail: `${names(idle)} tiene un directo descargado desde las ${st.desde} sin editar. Míralo en su página.` }
+      detail: `${names(idle)} no avanza desde las ${st.desde}${st.etapa ? ` (${st.etapa})` : ''}. Míralo en su página.` }
   }
   const warned = main.filter((b) => b.status?.warning)
   if (warned.length) {
@@ -69,7 +69,7 @@ function names(bots: BotView[]) {
 
 const STATE_LABELS: Record<string, string> = {
   idle: 'En reposo', running: 'Trabajando', watching: 'Vigilando', waiting: 'Esperando', needs_login: 'Sin sesión',
-  stopped: 'Parado', error: 'Error', crashed: 'Caído', stalled: 'Atascado', files_missing: 'Faltan archivos', installing: 'Instalándose', install_pending: 'Instalación sin terminar', on_demand: 'A demanda', unknown: 'Sin datos',
+  stopped: 'Parado', error: 'Error', crashed: 'Caído', stalled: 'Atascado', files_missing: 'Faltan archivos', downloading: 'Descargando', installing: 'Instalándose', install_pending: 'Instalación sin terminar', on_demand: 'A demanda', unknown: 'Sin datos',
 }
 
 /** ¿Puede este Lirio firmar aprobaciones para el bot? null = el bot no usa aprobaciones firmadas. */
@@ -90,7 +90,7 @@ export function stateTone(b: BotView): 'ok' | 'working' | 'warning' | 'error' | 
   if (b.stop_active) return 'warning'
   switch (b.state) {
     case 'watching': case 'idle': return 'ok'
-    case 'running': return 'working'
+    case 'running': case 'downloading': return 'working'
     case 'waiting': case 'needs_login': case 'stopped': case 'stalled': return 'warning'
     case 'files_missing': return 'error'
     case 'installing': return 'working'

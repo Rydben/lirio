@@ -21,14 +21,13 @@ describe('progreso del editor', () => {
     expect(fmtEta(3720)).toBe('1 h 2 min')
   })
 
-  it('avisa si vigila pero un directo descargado lleva rato sin editar', () => {
-    const now = Date.parse('2026-11-18T00:00:00Z')
-    const old = { pendientes_de_editar: [{ ruta: 'C:\\d\\v.mp4', descargado_at: '2026-11-17T23:00:00Z' }] }
-    expect(stalledInput(bot(old), now)?.min).toBe(60)
-    expect(stalledInput(bot({ pendientes_de_editar: [{ ruta: 'x', descargado_at: '2026-11-17T23:55:00Z' }] }), now)).toBeNull()
-    expect(stalledInput(bot({ ...old, current_job: { stage: 'edit' } }), now)).toBeNull()
-    expect(stalledInput(bot(old, 'stopped'), now)).toBeNull()
-    expect(moodFor([bot(old)]).title).toBe('El editor no avanza')
+  it('avisa si el editor dice que su bucle no avanza (atasco)', () => {
+    const st = { atasco: { desde: '2026-11-17T22:47:00', minutos: 60, etapa: 'watch' } }
+    expect(stalledInput(bot(st))).toEqual({ desde: '22:47', min: 60, etapa: 'watch' })
+    expect(stalledInput(bot({}))).toBeNull()
+    expect(moodFor([bot(st)]).title).toBe('El editor no avanza')
+    expect(stageName('download')).toBe('Descargando el directo')
+    expect(stageName('chat')).toBe('Descargando el chat')
   })
 })
 

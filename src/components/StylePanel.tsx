@@ -2,9 +2,9 @@
 // miniatura para el bot de miniaturas). Todo se guarda en el editor como preferencias (sin IA ni coste).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
-import { useJob } from '../lib/jobs'
-import { JobProgress } from './JobProgress'
-import { Icon, useToast } from './ui'
+import { editorTask } from '../lib/progress'
+import { useStore } from '../lib/store'
+import { Icon, ProgressBar, useToast } from './ui'
 
 interface Msg { de: 'tu' | 'bot'; texto: string; cambios?: string[] }
 interface Estilo { instrucciones: { id: string; texto: string; fecha?: string }[]; video_referencia?: string | null; miniatura_referencia?: string | null }
@@ -19,14 +19,24 @@ export function StylePanel({ botId, kind }: { botId: string; kind: 'video' | 'mi
   const [estilo, setEstilo] = useState<Estilo | null>(null)
   const end = useRef<HTMLDivElement>(null)
   const refCommand = kind === 'video' ? 'estilo-video' : 'estilo-miniatura'
-  const analysis = useJob(botId, refCommand, (e) => {
-    if (e.ok) { toast('ok', 'Referencia guardada: los próximos se parecerán.'); apply(e.resultado) }
-    else if (!e.cancelado) toast('error', e.resultado?.error ?? e.mensaje ?? 'No se pudo')
-  })
+  // el editor analiza la referencia en segundo plano y publica cómo va en status.json → tareas
+  const { overview } = useStore()
+  const task = editorTask(overview?.modules.find((m) => m.id === botId), kind === 'video' ? 'estilo_video' : 'estilo_miniatura')
+  const analyzing = task?.estado === 'en_marcha'
+  const [launching, setLaunching] = useState(false)
 
   const apply = (d: any) => { if (d?.instrucciones) setEstilo(d as Estilo) }
   const load = useCallback(() => api.runWith(botId, 'estilo').then((r) => apply(r.data)).catch(() => {}), [botId])
   useEffect(() => { load() }, [load])
+  // al terminar el análisis, se recarga lo aprendido
+  const wasAnalyzing = useRef(false)
+  useEffect(() => {
+    if (wasAnalyzing.current && !analyzing) {
+      if (task?.estado === 'hecho') { toast('ok', 'Referencia analizada: los próximos se parecerán.'); load() }
+      else if (task?.estado === 'error') toast('error', `No se pudo analizar: ${task.error ?? 'error'}`)
+    }
+    wasAnalyzing.current = analyzing
+  }, [analyzing, task?.estado, task?.error, load, toast])
   useEffect(() => { end.current?.scrollIntoView?.({ block: 'nearest' }) }, [msgs])
 
   const send = async () => {
@@ -51,8 +61,13 @@ export function StylePanel({ botId, kind }: { botId: string; kind: 'video' | 'mi
   const pickReference = async () => {
     const path = await api.pickFile(kind === 'video' ? 'Elige un vídeo de referencia' : 'Elige una miniatura de referencia', kind)
     if (!path) return
-    // analizar un vídeo largo tarda: va en segundo plano, con su barra, y no se puede lanzar dos veces
-    analysis.start({ '@archivo': path })
+    // el editor comprueba el archivo al momento y lo analiza en segundo plano (no lanza dos a la vez)
+    setLaunching(true)
+    const r = await api.runWith(botId, refCommand, { '@archivo': path })
+    setLaunching(false)
+    if (!r.ok) { toast('error', r.data?.error ?? r.message); return }
+    toast('info', r.data?.ya_en_marcha ? 'Ya se está analizando una referencia.' : (r.data?.mensaje ?? 'Analizando la referencia…'))
+    apply(r.data)
   }
 
   const ref = kind === 'video' ? estilo?.video_referencia : estilo?.miniatura_referencia
@@ -94,9 +109,15 @@ export function StylePanel({ botId, kind }: { botId: string; kind: 'video' | 'mi
             <button className="btn btn--ghost" onClick={() => forget(kind === 'video' ? 'video' : 'miniatura')}>Quitar</button>
           </div>
         )}
-        <JobProgress job={analysis.job} label="Analizando la referencia" onCancel={analysis.cancel} />
-        <button className="btn btn--outline" disabled={analysis.running} onClick={pickReference}>
-          <Icon name="upload" size={16} /> {analysis.running ? 'Analizando…' : ref ? 'Cambiar archivo…' : 'Elegir archivo…'}
+        {analyzing && (
+          <div className="job">
+            <span className="muted small">{task?.etapa ?? 'Analizando…'}{typeof task?.porcentaje === 'number' ? ` · ${task.porcentaje} %` : ''}</span>
+            <ProgressBar percent={task?.porcentaje ?? 0} label="Analizando la referencia" />
+            <p className="muted small">Puedes seguir usando Lirio mientras tanto.</p>
+          </div>
+        )}
+        <button className="btn btn--outline" disabled={analyzing || launching} onClick={pickReference}>
+          <Icon name="upload" size={16} /> {analyzing ? 'Analizando…' : launching ? 'Un momento…' : ref ? 'Cambiar archivo…' : 'Elegir archivo…'}
         </button>
         <h3 style={{ marginTop: 18 }}>Lo que ya sabe de tu estilo</h3>
         {!estilo || estilo.instrucciones.length === 0 ? <p className="muted small">Todavía nada.</p> : (

@@ -8,6 +8,7 @@ import { ThumbnailsPanel } from './ThumbnailsPanel'
 import { TrashPanel } from './TrashPanel'
 import { ToastProvider } from './ui'
 import { human } from './units'
+import { StoreProvider } from '../lib/store'
 
 const wrap = (ui: React.ReactNode) => render(<ToastProvider>{ui}</ToastProvider>)
 
@@ -37,7 +38,7 @@ describe('miniaturas', () => {
 
 describe('tu estilo', () => {
   it('manda el mensaje al editor y enseña lo que cambió', async () => {
-    wrap(<StylePanel botId="twitch-autoeditor" kind="video" />)
+    wrap(<StoreProvider><StylePanel botId="twitch-autoeditor" kind="video" /></StoreProvider>)
     expect(await screen.findByText('Cortes rápidos en las jugadas')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Mensaje para el editor'), { target: { value: 'cortes más rápidos' } })
     fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))

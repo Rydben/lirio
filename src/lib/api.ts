@@ -7,7 +7,7 @@ import { demo } from './demo'
 
 export type BotState =
   | 'idle' | 'running' | 'watching' | 'waiting' | 'needs_login' | 'stopped' | 'error' | 'crashed'
-  | 'on_demand' | 'unknown' | 'stalled' | 'files_missing' | 'installing' | 'install_pending'
+  | 'on_demand' | 'unknown' | 'stalled' | 'files_missing' | 'installing' | 'install_pending' | 'downloading'
 
 export interface Approval {
   id: string

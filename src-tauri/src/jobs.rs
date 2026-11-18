@@ -14,7 +14,8 @@ use tauri::{Emitter, State};
 use crate::{cli, flags, winutil, AppState};
 
 /// Comandos que van siempre como trabajo en segundo plano (los demás, con `run_with` y tiempo límite).
-pub const LONG: &[&str] = &["estilo-video", "estilo-miniatura", "miniaturas-generar", "editar-ahora"];
+/// (estilo-video, estilo-miniatura y editar ya vuelven enseguida y el editor publica su avance en status.json)
+pub const LONG: &[&str] = &["miniaturas-generar"];
 
 struct Job {
     pid: Option<u32>,

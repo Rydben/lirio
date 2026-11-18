@@ -57,8 +57,9 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("estilo-borrar", &[("@que", Kind::Text)]),
     ("estilo-video", &[("@archivo", Kind::Path)]),
     ("estilo-miniatura", &[("@archivo", Kind::Path)]),
-    // Poner a editar ya un directo descargado (trabajo largo; el avance sale en status.json)
-    ("editar-ahora", &[("@ruta", Kind::Path)]),
+    // Poner a editar un directo descargado: vuelve enseguida (a la cola del watcher o en segundo plano);
+    // el avance sale en status.json. --rehacer: otra versión en otra carpeta, sin borrar la anterior.
+    ("editar", &[("@que", Kind::Path), ("--rehacer", Kind::Flag)]),
 ];
 
 pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<String>, String> {

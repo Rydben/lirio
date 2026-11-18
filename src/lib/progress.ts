@@ -3,6 +3,7 @@ import { human } from '../components/units'
 import type { BotView } from './api'
 
 const STAGES: Record<string, string> = {
+  download: 'Descargando el directo', chat: 'Descargando el chat',
   descarga: 'Descargando el directo', remux: 'Preparando el vídeo (remux)', ingest: 'Leyendo el vídeo', mic: 'Revisando tu micro',
   transcribe: 'Escuchando lo que dices', detect: 'Buscando los mejores momentos', select: 'Eligiendo los clips', edit: 'Montando el vídeo',
   thumbnail: 'Haciendo miniaturas', publish: 'Preparando la subida',
@@ -25,16 +26,15 @@ export function jobDetail(job: Record<string, any>): string {
   return parts.join(' · ')
 }
 
-export const STALL_MIN = 15
-
-/** El bot dice que vigila, no está haciendo nada y tiene un directo descargado esperando desde hace rato. */
-export function stalledInput(b: BotView, now = Date.now()): { ruta: string; desde: string; min: number } | null {
-  const s = b.status
-  if (!s || s.current_job || !['watching', 'idle', 'running'].includes(b.state)) return null
-  const list: { ruta: string; descargado_at: string }[] = s.pendientes_de_editar ?? []
-  const oldest = list.map((p) => ({ ...p, t: Date.parse(p.descargado_at) })).filter((p) => !Number.isNaN(p.t)).sort((a, z) => a.t - z.t)[0]
-  if (!oldest) return null
-  const min = Math.floor((now - oldest.t) / 60000)
-  if (min < STALL_MIN) return null
-  return { ruta: oldest.ruta, desde: new Date(oldest.t).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }), min }
+/** El editor avisa él mismo si su bucle no avanza (45 min): `atasco` = {desde, minutos, etapa, informe}. */
+export function stalledInput(b: BotView): { desde: string; min: number; etapa?: string } | null {
+  const a = b.status?.atasco
+  if (!a) return null
+  const t = Date.parse(a.desde)
+  const desde = Number.isNaN(t) ? String(a.desde ?? '') : new Date(t).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+  return { desde, min: Number(a.minutos ?? 0), etapa: a.etapa }
 }
+
+/** Tarea en segundo plano del editor (status.json → tareas.<nombre>) */
+export interface EditorTask { estado: 'en_marcha' | 'hecho' | 'error'; porcentaje?: number; etapa?: string; archivo?: string; error?: string; resultado?: any }
+export const editorTask = (b: BotView | undefined, name: string): EditorTask | null => b?.status?.tareas?.[name] ?? null

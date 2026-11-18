@@ -241,9 +241,12 @@ function Summary({ bot, details }: { bot: BotView; details: Details | null }) {
           </>
         ) : <p className="muted">{botSummary(bot)}</p>}
         {s.warning && <p className="warn"><Icon name="alert" size={16} /> {String(s.warning)}</p>}
-        {stalledInput(bot) && (
-          <p className="warn"><Icon name="alert" size={16} /> Hay un directo descargado desde las {stalledInput(bot)!.desde} y el editor no lo
-            está editando. Puedes ponerlo a editar en la pestaña <b>Papelera</b> → «Editar ahora».</p>
+        {stalledInput(bot) && !s.warning && (
+          <p className="warn"><Icon name="alert" size={16} /> El editor no avanza desde las {stalledInput(bot)!.desde}. Prueba Parar y Arrancar,
+            o ponlo a editar a mano en <b>Papelera</b> → «Editar ahora».</p>
+        )}
+        {Array.isArray(s.cola_editar) && s.cola_editar.length > 0 && (
+          <p className="muted small">En cola para editar: {s.cola_editar.length}</p>
         )}
         {s.last_error && <p className="error-text"><Icon name="alert" size={16} /> {String(s.last_error)}</p>}
         {bot.id === 'twitch-moderator' && s.moderation && (

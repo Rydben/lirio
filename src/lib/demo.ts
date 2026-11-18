@@ -110,6 +110,7 @@ export const demo = {
         if (c.startsWith('estilo')) return { ...ok, data: { ok: true, respuesta: 'Hecho: haré los cortes más rápidos.',
           cambios: [{ tipo: 'instruccion', id: 'i2', texto: 'cortes más rápidos' }],
           instrucciones: [{ id: 'i1', texto: 'Cortes rápidos en las jugadas' }], video_referencia: null, miniatura_referencia: null } } as T
+        if (c === 'editar') return { ...ok, data: { ok: true, modo: 'cola', posicion: 1, mensaje: 'En cola: el editor lo coge en su próxima vuelta.' } } as T
         if (c === 'miniatura-elegir' || c === 'miniaturas-generar') return { ...ok, data: { ok: true } } as T
         if (c === 'bans-recientes') return { ...ok, data: { bans: [{ id: 'b1', at: now(), login: 'spammer123', reason: 'enlaces',
           message: 'compra seguidores en…', category: 'spam', rule: 'R3', immediate: true, undone: false }] } } as T
