@@ -29,6 +29,15 @@ describe('progreso del editor', () => {
     expect(stageName('download')).toBe('Descargando el directo')
     expect(stageName('chat')).toBe('Descargando el chat')
   })
+
+  it('avisa también si un directo «pendiente» lleva más de 15 min sin editarse (no los que están en espera)', () => {
+    const now = Date.parse('2026-11-18T00:00:00Z')
+    const pend = (estado: string, at = '2026-11-17T23:00:00Z') => ({ pendientes_de_editar: [{ ruta: 'x', estado, descargado_at: at }] })
+    expect(stalledInput(bot(pend('pendiente')), now)?.min).toBe(60)
+    expect(stalledInput(bot(pend('en_espera')), now)).toBeNull()
+    expect(stalledInput(bot(pend('pendiente', '2026-11-17T23:55:00Z')), now)).toBeNull()
+    expect(stalledInput(bot({ ...pend('pendiente'), current_job: { stage: 'edit' } }), now)).toBeNull()
+  })
 })
 
 describe('trabajos largos', () => {
