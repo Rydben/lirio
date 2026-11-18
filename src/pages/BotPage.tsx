@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ApprovalCard, useSignedDecision } from '../components/Approvals'
 import { ChatPanel } from '../components/ChatPanel'
 import { GpuPanel } from '../components/GpuPanel'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 import { InstallPanel } from '../components/InstallProgress'
 import { jobDetail, stageName, stalledInput } from '../lib/progress'
 import { StylePanel } from '../components/StylePanel'
@@ -104,6 +105,7 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
         ))}
       </nav>
       <div className="tab-body">
+        <ErrorBoundary key={tab} where={`${bot.name} → ${tab}`} onBack={() => setTab('resumen')}>
         {tab === 'resumen' && <Summary bot={bot} details={details} />}
         {tab === 'cola' && details && <Queue bot={bot} details={details} reload={load} />}
         {tab === 'espera' && details && <Held bot={bot} details={details} />}
@@ -136,6 +138,7 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
           </div>
         )}
         {tab === 'ajustes' && (caps.ajustes ? <SettingsForm botId={bot.id} /> : <Settings bot={bot} />)}
+        </ErrorBoundary>
       </div>
     </div>
   )

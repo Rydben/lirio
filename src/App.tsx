@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { ApprovalCard } from './components/Approvals'
 import { LirioLogo } from './components/LirioLogo'
 import { ScreenFace } from './components/Face'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Icon, ToastProvider, useToast } from './components/ui'
 import { api, inTauri, type UploadEvent } from './lib/api'
 import { moodFor } from './lib/mood'
@@ -163,11 +164,14 @@ function Main() {
               <button className="btn btn--ghost" aria-label="Cerrar aviso" onClick={() => setCrashed(false)}><Icon name="close" size={16} /></button>
             </div>
           )}
-          {page.kind === 'home' && <Home go={go} />}
-          {page.kind === 'bot' && <BotPage key={`${page.id}-${page.tab ?? ''}`} id={page.id} tab={page.tab} />}
-          {page.kind === 'approvals' && <ApprovalsPage />}
-          {page.kind === 'settings' && <SettingsPage />}
-          {page.kind === 'journal' && <JournalPage />}
+          <ErrorBoundary key={JSON.stringify(page)} where={`página ${page.kind}${page.kind === 'bot' ? ` ${page.id}` : ''}`}
+            onBack={() => go({ kind: 'home' })}>
+            {page.kind === 'home' && <Home go={go} />}
+            {page.kind === 'bot' && <BotPage key={`${page.id}-${page.tab ?? ''}`} id={page.id} tab={page.tab} />}
+            {page.kind === 'approvals' && <ApprovalsPage />}
+            {page.kind === 'settings' && <SettingsPage />}
+            {page.kind === 'journal' && <JournalPage />}
+          </ErrorBoundary>
         </div>
       </main>
     </div>

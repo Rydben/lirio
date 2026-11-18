@@ -614,6 +614,13 @@ async fn open_bot_folder(app: tauri::AppHandle, state: State<'_, AppState>, id: 
     app.opener().open_path(&ruta, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// Una parte de la interfaz falló al pintarse: se apunta en el Diario (Lirio enseña un aviso en su lugar).
+#[tauri::command]
+fn ui_error(state: State<AppState>, texto: String) {
+    let t: String = texto.chars().filter(|c| !c.is_control()).take(300).collect();
+    state.journal.add("error_interfaz", None, &format!("La interfaz falló: {t}"), false);
+}
+
 /// Carpetas de Lirio en este PC (para añadirlas como excepción en el antivirus).
 #[tauri::command]
 fn help_paths(state: State<AppState>) -> Value {
@@ -732,7 +739,7 @@ pub fn run() {
             wizard::ollama_pull, wizard::ollama_setup, wizard::install_client_secret, wizard::gpu_status, wizard::install_gpu, release_info, check_update, install_update,
             journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions,
             help_paths, last_session, open_bot_folder, thumbnails, signed_approve_deletes,
-            jobs::job_start, jobs::jobs_status, jobs::job_cancel
+            jobs::job_start, jobs::jobs_status, jobs::job_cancel, ui_error
         ])
         .build(tauri::generate_context!())
         .expect("error al arrancar Lirio")

@@ -9,9 +9,37 @@ import { useStore } from '../lib/store'
 import { Icon, ProgressBar, useToast } from './ui'
 
 interface Msg { de: 'tu' | 'bot'; texto: string; cambios?: string[] }
-interface Estilo { instrucciones: { id: string; texto: string; fecha?: string }[]; video_referencia?: string | null; miniatura_referencia?: string | null }
+/** Referencia tal como la da el editor: un objeto {archivo, medido, acento, fecha…} (o, en versiones viejas, la ruta) */
+type Ref = string | { archivo?: string; copia?: string; ruta?: string; medido?: Record<string, number>; acento?: number[]; fecha?: string } | null | undefined
+interface Instr { id: string; texto: string; fecha?: string }
+interface Estilo { instrucciones: Instr[]; video_referencia?: Ref; miniatura_referencia?: Ref }
 
-const fileName = (p?: string | null) => (p ? p.split(/[\\/]/).pop() : null)
+const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p
+/** Nombre del archivo de una referencia, venga como venga; null si no hay */
+export function refName(r: Ref): string | null {
+  if (!r) return null
+  if (typeof r === 'string') return baseName(r)
+  const n = r.archivo ?? r.copia ?? r.ruta
+  return typeof n === 'string' && n ? baseName(n) : 'referencia guardada'
+}
+/** «8,5 cortes por minuto · planos de 7 s» (vídeo) o el color de acento (miniatura) */
+export function refSummary(r: Ref): string {
+  if (!r || typeof r !== 'object') return ''
+  const m = r.medido ?? {}
+  const parts: string[] = []
+  if (typeof m.cuts_per_min === 'number') parts.push(`${m.cuts_per_min.toFixed(1).replace('.', ',')} cortes por minuto`)
+  if (typeof m.avg_shot_s === 'number') parts.push(`planos de ${Math.round(m.avg_shot_s)} s`)
+  return parts.join(' · ')
+}
+/** Acepta la respuesta del editor aunque le falten campos o cambien de forma */
+export function toEstilo(d: any): Estilo | null {
+  if (!d || typeof d !== 'object' || !('instrucciones' in d || 'video_referencia' in d || 'miniatura_referencia' in d)) return null
+  const instr: Instr[] = Array.isArray(d.instrucciones)
+    ? d.instrucciones.map((x: any, i: number) => (typeof x === 'string' ? { id: String(i), texto: x }
+        : { id: String(x?.id ?? i), texto: String(x?.texto ?? x?.text ?? ''), fecha: x?.fecha })).filter((x: Instr) => x.texto)
+    : []
+  return { instrucciones: instr, video_referencia: d.video_referencia ?? null, miniatura_referencia: d.miniatura_referencia ?? null }
+}
 
 export function StylePanel({ botId, kind }: { botId: string; kind: 'video' | 'miniatura' }) {
   const toast = useToast()
@@ -33,7 +61,7 @@ export function StylePanel({ botId, kind }: { botId: string; kind: 'video' | 'mi
   const outside = task?.estado === 'en_marcha' && !analysis.running
   const busy = analysis.running || outside
 
-  const apply = (d: any) => { if (d?.instrucciones) setEstilo(d as Estilo) }
+  const apply = (d: any) => { const e = toEstilo(d); if (e) setEstilo(e) }
   const load = useCallback(() => api.runWith(botId, 'estilo').then((r) => apply(r.data)).catch(() => {}), [botId])
   useEffect(() => { load() }, [load])
   useEffect(() => { end.current?.scrollIntoView?.({ block: 'nearest' }) }, [msgs])
@@ -98,7 +126,7 @@ export function StylePanel({ botId, kind }: { botId: string; kind: 'video' | 'mi
         </p>
         {ref && (
           <div className="row">
-            <span className="small">Ahora: <b>{fileName(ref)}</b></span>
+            <span className="small">Ahora: <b>{refName(ref)}</b>{refSummary(ref) ? <span className="muted"> · {refSummary(ref)}</span> : null}</span>
             <button className="btn btn--ghost" onClick={() => forget(kind === 'video' ? 'video' : 'miniatura')}>Quitar</button>
           </div>
         )}

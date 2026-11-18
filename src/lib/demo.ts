@@ -166,6 +166,7 @@ export const demo = {
       case 'jobs_status': return {} as T
       case 'job_cancel': return true as T
       case 'signed_approve_deletes': return ok as T
+      case 'ui_error': return undefined as T
       case 'help_paths': return { programa: 'C:\\Users\\Ana\\AppData\\Local\\Lirio', datos: 'C:\\Users\\Ana\\AppData\\Local\\LirioDatos' } as T
       case 'last_session': return { cerrado_de_golpe: false } as T
       case 'gpu_status': return { declara: args?.id === 'twitch-autoeditor', instalado: false, nvidia: true, progreso: null } as T

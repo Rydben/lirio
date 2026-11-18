@@ -247,6 +247,7 @@ export const api = {
       ? [{ name: 'Vídeos', extensions: ['mp4', 'mkv', 'mov', 'webm', 'flv'] }]
       : [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] }) as Promise<string | null>
       : Promise.resolve(kind === 'video' ? 'C:\\Videos\\referencia.mp4' : 'C:\\Imagenes\\referencia.png'),
+  uiError: (texto: string) => call<void>('ui_error', { texto }),
   helpPaths: () => call<{ programa: string; datos: string }>('help_paths'),
   lastSession: () => call<{ cerrado_de_golpe: boolean }>('last_session'),
   gpuStatus: (id: string) => call<GpuStatus>('gpu_status', { id }),
