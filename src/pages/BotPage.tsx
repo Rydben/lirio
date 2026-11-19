@@ -6,6 +6,7 @@ import { ChatPanel } from '../components/ChatPanel'
 import { GpuPanel } from '../components/GpuPanel'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { InstallPanel } from '../components/InstallProgress'
+import { LearnedPanel } from '../components/LearnedPanel'
 import { jobDetail, stageName, stalledInput } from '../lib/progress'
 import { StylePanel } from '../components/StylePanel'
 import { ThumbnailsPanel } from '../components/ThumbnailsPanel'
@@ -117,7 +118,12 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
         {tab === 'estadisticas' && <Insights botId={bot.id} />}
         {tab === 'chat' && <ChatPanel botId={bot.id} />}
         {tab === 'miniaturas' && <ThumbnailsPanel botId={editor.target} />}
-        {tab === 'estilo' && <StylePanel botId={editor.target} kind={styleKind} />}
+        {tab === 'estilo' && (
+          <div className="stack">
+            <StylePanel botId={editor.target} kind={styleKind} />
+            {styleKind === 'video' && <LearnedPanel botId={editor.target} />}
+          </div>
+        )}
         {tab === 'papelera' && <TrashPanel botId={editor.target} goSettings={() => setTab('ajustes')} />}
         {tab === 'twitch' && (
           <div className="grid-2">

@@ -59,3 +59,18 @@ describe('trabajos largos', () => {
     expect(screen.queryByRole('button', { name: /Editar ahora/ })).toBeNull()
   })
 })
+
+describe('aprendido de tus estadísticas', () => {
+  it('enseña lo aprendido «en pruebas», lo descartado, los límites, y se puede quitar', async () => {
+    const { LearnedPanel } = await import('./LearnedPanel')
+    const { fireEvent } = await import('@testing-library/react')
+    render(<ToastProvider><LearnedPanel botId="twitch-autoeditor" /></ToastProvider>)
+    expect(await screen.findByText('Gancho más corto al empezar')).toBeInTheDocument()
+    expect(screen.getByText('en pruebas')).toBeInTheDocument()
+    expect(screen.getByText(/«menos Shorts» manda/)).toBeInTheDocument()
+    expect(screen.getByText(/se deshace solo/)).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Aprender de mis estadísticas' })).toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar: Gancho más corto al empezar' }))
+    expect(await screen.findByText(/Todavía no ha cambiado nada/)).toBeInTheDocument()
+  })
+})

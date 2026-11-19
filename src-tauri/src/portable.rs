@@ -46,6 +46,7 @@ pub fn env_vars(data: &Path) -> Vec<(&'static str, PathBuf)> {
         ("XDG_CACHE_HOME", cache.clone()),
         ("PIP_CACHE_DIR", cache.join("pip")),
         ("PYTHONPYCACHEPREFIX", cache.join("pycache")),
+        ("OLLAMA_MODELS", cache.join("ollama")),
     ]
 }
 

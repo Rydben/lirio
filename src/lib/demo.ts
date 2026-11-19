@@ -107,6 +107,11 @@ export const demo = {
           directos: [{ archivo: '2026-11-14.mp4', ruta: 'C:\\v\\downloads\\2026-11-14.mp4', mb: 6400, fecha: now(), estado: 'editado', se_puede_borrar: true }],
           editados: [{ carpeta: 'C:\\v\\output\\viernes', nombre: 'viernes', titulo: 'Directo del viernes', mb: 900, shorts: 3, fecha: now(), subido: true }] } } as T
         if (c === 'papelera-borrar') return { ...ok, data: { ok: true, liberado_mb: 900 } } as T
+        if (c.startsWith('aprendido')) return { ...ok, data: { ok: true, etiqueta: 'aprendido de tus estadísticas', activado: c === 'aprendido-activar' ? args?.flags && (args.flags as any)['@valor'] === 'si' : true,
+          cambios: c === 'aprendido-borrar' ? [] : [{ uid: 'u1', id: 'gancho', texto: 'Gancho más corto al empezar', motivo: 'La gente se va en los primeros 20 s (−18 %)', estado: 'probando', aplicado_at: now() }],
+          historial: [{ uid: 'u0', id: 'mas_shorts', texto: 'Más Shorts', motivo: 'Los Shorts traen el 60 % de las visitas', estado: 'deshecho', resultado: 'empeoró' }],
+          descartados: [{ id: 'mas_shorts', texto: 'Más Shorts', por_que_no: 'tu instrucción «menos Shorts» manda' }],
+          limites: 'Como mucho 1-2 cambios por vídeo; si empeora, se deshace solo. Lo que tú escribes en «Tu estilo» manda.' } } as T
         if (c.startsWith('estilo')) return { ...ok, data: { ok: true, respuesta: 'Hecho: haré los cortes más rápidos.',
           cambios: [{ tipo: 'instruccion', id: 'i2', texto: 'cortes más rápidos' }],
           instrucciones: [{ id: 'i1', texto: 'Cortes rápidos en las jugadas' }], video_referencia: null, miniatura_referencia: null } } as T

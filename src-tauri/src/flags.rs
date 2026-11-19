@@ -15,7 +15,6 @@ pub enum Kind {
     /// Ruta absoluta de Windows (≤ 400). El bot comprueba que esté dentro de sus carpetas.
     Path,
     /// Uno de estos valores
-    #[allow(dead_code)]
     Choice(&'static [&'static str]),
     /// Lista de rutas absolutas (1 a 50)
     PathList,
@@ -57,6 +56,10 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("estilo-borrar", &[("@que", Kind::Text)]),
     ("estilo-video", &[("@archivo", Kind::Path)]),
     ("estilo-miniatura", &[("@archivo", Kind::Path)]),
+    // Ajustes aprendidos de las estadísticas: verlos, borrar uno (o todo) y el interruptor general
+    ("aprendido", &[]),
+    ("aprendido-borrar", &[("@que", Kind::Text)]),
+    ("aprendido-activar", &[("@valor", Kind::Choice(&["si", "no"]))]),
     // Poner a editar un directo descargado: vuelve enseguida (a la cola del watcher o en segundo plano);
     // el avance sale en status.json. --rehacer: otra versión en otra carpeta, sin borrar la anterior.
     ("editar", &[("@que", Kind::Path), ("--rehacer", Kind::Flag)]),
@@ -152,6 +155,8 @@ fn positional_values(name: &str, kind: Kind, value: &Value) -> Result<Vec<String
             text_ok(name, kind, t)?;
             Ok(vec![t.to_string()])
         }
+        Kind::Choice(options) => value.as_str().filter(|t| options.contains(t)).map(|t| vec![t.to_string()])
+            .ok_or_else(|| format!("{} debe ser uno de: {}", &name[1..], options.join(", "))),
         _ => Err(format!("{name}: tipo no admitido como posicional")),
     }
 }
@@ -213,6 +218,8 @@ mod tests {
         assert!(build_args("estilo-chat", &m(json!({"@mensaje": "a".repeat(300)}))).is_ok());
         assert!(build_args("estilo-chat", &m(json!({"@mensaje": "a".repeat(501)}))).is_err());
         assert_eq!(build_args("estilo-borrar", &m(json!({"@que": "video"}))).unwrap(), vec!["video"]);
+        assert_eq!(build_args("aprendido-activar", &m(json!({"@valor": "no"}))).unwrap(), vec!["no"]);
+        assert!(build_args("aprendido-activar", &m(json!({"@valor": "quizas"}))).is_err());
     }
 
     #[test]
