@@ -13,3 +13,5 @@ until cp src-tauri/target-instalar/release/lirio.exe "$DEST/lirio.exe" 2>/dev/nu
   echo "Lirio está abierto: lo copiaré cuando lo cierres…"; sleep 10
 done
 echo "Instalado en $DEST"
+# no guardar la compilación aparte (ocupa varios GB)
+rm -rf src-tauri/target-instalar

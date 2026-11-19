@@ -65,6 +65,25 @@ def version() -> str:
     return json.loads((TAURI / "tauri.conf.json").read_text(encoding="utf-8"))["version"]
 
 
+LIMITE_TARGET = 5 * 1024 ** 3
+
+
+def tamano(p: Path) -> int:
+    return sum(f.stat().st_size for f in p.rglob("*") if f.is_file()) if p.exists() else 0
+
+
+def limpiar_target(antes: bool) -> None:
+    """Las compilaciones ocupan mucho disco: antes de compilar, si `target` pasa de 5 GB se limpia entero;
+    al terminar se borran las de pruebas (debug) y la carpeta vieja de instalación local."""
+    target = TAURI / "target"
+    viejos = [TAURI / "target-instalar"] + ([] if antes else [target / "debug"])
+    for v in viejos:
+        shutil.rmtree(v, ignore_errors=True)
+    if antes and tamano(target) > LIMITE_TARGET:
+        print("target ocupa más de 5 GB: se limpia antes de compilar")
+        shutil.rmtree(target, ignore_errors=True)
+
+
 def build_tools() -> None:
     run(["cargo", "build", "--release", "--bin", "lirio-publicar", "--manifest-path", TAURI / "Cargo.toml"])
 
@@ -95,6 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         shutil.rmtree(out)
     out.mkdir(parents=True)
 
+    limpiar_target(antes=True)
     build_tools()
     # 1-2. Bots y catálogo firmado
     run([sys.executable, ROOT / "scripts" / "empaquetar.py", *args.bots, "--salida", out])
@@ -146,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
         f"**Lirio Portátil** (en una USB, para cybers; solo el moderador): `{portable_zip.name}`. "
         "Descomprímelo en la USB y abre Lirio-Portatil.exe.\n", encoding="utf-8")
 
+    limpiar_target(antes=False)
     print(f"\nPreparado en {out}:")
     for f in sorted(out.iterdir()):
         print(f"  {f.name:45} {f.stat().st_size / 1e6:8.1f} MB")

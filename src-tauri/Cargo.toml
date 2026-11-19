@@ -53,6 +53,11 @@ windows-sys = { version = "0.59", features = [
 [dev-dependencies]
 tempfile = "3"
 
+[profile.dev]
+# compilaciones de prueba ligeras: sin información de depuración ni caché incremental (ocupan mucho disco)
+debug = 0
+incremental = false
+
 [profile.release]
 codegen-units = 1
 lto = true
