@@ -165,8 +165,8 @@ function ProgramCard({ prog, stats }: { prog: Programa; stats: Record<string, an
               <span>{pr.req.texto}{alt && <span className="muted"> (o la otra opción: {l.una_de.filter((r) => r !== pr.req).map((r) => `${fmt(r.meta, r.unidad)} ${r.texto.toLowerCase()}`).join(', ')})</span>}</span>
               <span className="monet__val">{fmt(pr.valor, pr.req.unidad)} / {fmt(pr.req.meta, pr.req.unidad)}</span>
             </div>
-            {pr.valor !== null ? <ProgressBar percent={pr.pct} label={pr.req.texto} />
-              : <p className="muted small">{pr.motivo ?? 'Sin dato: la plataforma no lo da o el bot aún no lo sabe.'}</p>}
+            {pr.valor !== null && <ProgressBar percent={pr.pct} label={pr.req.texto} />}
+            {(pr.motivo || pr.valor === null) && <p className="muted small">{pr.motivo ?? 'Sin dato: la plataforma no lo da o el bot aún no lo sabe.'}</p>}
           </div>
         )
       })}

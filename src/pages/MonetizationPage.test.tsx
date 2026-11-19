@@ -92,3 +92,17 @@ describe('formato real del moderador', () => {
     expect(reasonAt(s, 'seguidores')).toMatch(/Conecta/)
   })
 })
+
+describe('formato real del editor', () => {
+  it('enseña la explicación de horas y Shorts aunque haya cifra, y lo de los suscriptores ocultos', async () => {
+    const { progress, BUNDLED: B } = await import('../lib/monetizacion')
+    const anun = B.plataformas.youtube.programas.find((p) => p.id === 'anuncios')!
+    const una = anun.requisitos.find((l) => 'una_de' in l)!
+    const horas = ('una_de' in una ? una.una_de : []).find((r) => r.id === 'horas')!
+    const s = { horas_publicas_12m: 24.3, horas_motivo: 'Incluye vídeos ocultos si los hubo.', suscriptores: null, suscriptores_ocultos: true }
+    expect(progress(horas, s).motivo).toMatch(/ocultos si los hubo/)
+    expect(progress(horas, s).valor).toBe(24.3)
+    const subs = anun.requisitos.find((l) => !('una_de' in l) && l.id === 'suscriptores')!
+    expect(progress(subs as never, s).motivo).toMatch(/oculto/)
+  })
+})

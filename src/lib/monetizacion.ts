@@ -2,7 +2,8 @@
 // Lirio solo guía: nunca acepta contratos ni toca datos fiscales o bancarios.
 import bundled from '../data/monetizacion.json'
 
-export interface Requisito { id: string; texto: string; meta: number; unidad?: 'min' | 'h'; dato: string }
+/** `motivo`: campo de las cifras con la explicación de ese dato (p. ej. `horas_motivo` del editor). */
+export interface Requisito { id: string; texto: string; meta: number; unidad?: 'min' | 'h'; dato: string; motivo?: string }
 export type Linea = Requisito | { una_de: Requisito[] }
 export interface Programa { id: string; nombre: string; resumen: string; fuente: string; requisitos: Linea[]; notas?: string[] }
 export interface Paso { texto: string; url?: string }
@@ -38,6 +39,7 @@ export function reasonAt(stats: unknown, path: string): string | null {
   // el motivo puede venir junto al dato (`ultimos_30_dias.motivos.media_espectadores`) o arriba (`motivos.seguidores`)
   let parent: any = s
   for (const k of parts) parent = parent?.[k]
+  if (key === 'suscriptores' && s?.suscriptores_ocultos) return 'Tu canal tiene oculto el número de suscriptores, así que YouTube no lo da.'
   return parent?.motivos?.[key] ?? s?.motivos?.[path] ?? s?.motivos?.[key] ?? null
 }
 
@@ -46,7 +48,10 @@ export interface Progreso { req: Requisito; valor: number | null; pct: number; h
 export function progress(req: Requisito, stats: unknown): Progreso {
   const valor = valueAt(stats, req.dato)
   const pct = valor === null ? 0 : Math.max(0, Math.min(100, (valor / req.meta) * 100))
-  return { req, valor, pct, hecho: valor !== null && valor >= req.meta, motivo: valor === null ? reasonAt(stats, req.dato) : null }
+  // la explicación propia del dato (si la hay) se enseña siempre: dice de dónde sale la cifra o por qué falta
+  const own = req.motivo ? (stats as Record<string, unknown> | null)?.[req.motivo] : null
+  const motivo = typeof own === 'string' && own ? own : valor === null ? reasonAt(stats, req.dato) : null
+  return { req, valor, pct, hecho: valor !== null && valor >= req.meta, motivo }
 }
 
 /** De varias alternativas («una de»), la que va más avanzada. */

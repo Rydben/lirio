@@ -71,8 +71,8 @@
             { "id": "suscriptores", "texto": "Suscriptores", "meta": 500, "dato": "suscriptores" },
             { "id": "videos", "texto": "Vídeos públicos subidos (últimos 90 días)", "meta": 3, "dato": "videos_publicos_90d" },
             { "una_de": [
-              { "id": "horas", "texto": "Horas de visualización públicas de vídeos largos (últimos 365 días)", "meta": 3000, "unidad": "h", "dato": "horas_publicas_12m" },
-              { "id": "shorts", "texto": "Visualizaciones de Shorts (últimos 90 días)", "meta": 3000000, "dato": "vistas_shorts_90d" }
+              { "id": "horas", "texto": "Horas de visualización públicas de vídeos largos (últimos 365 días)", "meta": 3000, "unidad": "h", "dato": "horas_publicas_12m", "motivo": "horas_motivo" },
+              { "id": "shorts", "texto": "Visualizaciones de Shorts (últimos 90 días)", "meta": 3000000, "dato": "vistas_shorts_90d", "motivo": "shorts_motivo" }
             ] }
           ],
           "notas": ["Mayor de 18 años y vivir en un país donde esté disponible."]
@@ -85,8 +85,8 @@
           "requisitos": [
             { "id": "suscriptores", "texto": "Suscriptores", "meta": 1000, "dato": "suscriptores" },
             { "una_de": [
-              { "id": "horas", "texto": "Horas de visualización públicas de vídeos largos (últimos 12 meses)", "meta": 4000, "unidad": "h", "dato": "horas_publicas_12m" },
-              { "id": "shorts", "texto": "Visualizaciones de Shorts (últimos 90 días)", "meta": 10000000, "dato": "vistas_shorts_90d" }
+              { "id": "horas", "texto": "Horas de visualización públicas de vídeos largos (últimos 12 meses)", "meta": 4000, "unidad": "h", "dato": "horas_publicas_12m", "motivo": "horas_motivo" },
+              { "id": "shorts", "texto": "Visualizaciones de Shorts (últimos 90 días)", "meta": 10000000, "dato": "vistas_shorts_90d", "motivo": "shorts_motivo" }
             ] }
           ],
           "notas": [
