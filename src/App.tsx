@@ -83,6 +83,8 @@ function Main() {
   const [query, setQuery] = useState('')
   const [crashed, setCrashed] = useState(false)
   const [testData, setTestData] = useState<string | null>(null)
+  const [portable, setPortable] = useState(false)
+  useEffect(() => { api.releaseInfo().then((r) => setPortable(!!r.portatil)).catch(() => {}) }, [])
   useEffect(() => { api.releaseInfo().then((r) => setTestData(r.prueba ? r.datos ?? '?' : null)).catch(() => {}) }, [])
   useEffect(() => { api.lastSession().then((s) => setCrashed(s.cerrado_de_golpe)).catch(() => {}) }, [])
   const { overview, error, uploads } = useStore()
@@ -122,6 +124,7 @@ function Main() {
         <div className="brand">
           <div className="brand__logo"><LirioLogo size={60} /></div>
           <div className="brand__name">Lirio</div>
+          <div className={`brand__edition${portable ? ' brand__edition--usb' : ''}`}>{portable ? 'Portátil' : 'Desktop'}</div>
           <div className="brand__tag">Tus bots, a un clic</div>
         </div>
         <nav className="nav">

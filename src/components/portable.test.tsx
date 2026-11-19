@@ -49,7 +49,7 @@ describe('Crear Lirio en una USB', () => {
     fireEvent.change(screen.getByLabelText('Repite el PIN de la USB'), { target: { value: 'clave-123' } })
     fireEvent.click(btn)
     expect(create).toHaveBeenCalledWith('E:', 'clave-123', '')
-    expect(await screen.findByText(/Lirio está en E:\\Lirio/)).toBeInTheDocument()
+    expect(await screen.findByText(/Lirio Portátil está en E:\\Lirio-Portatil/)).toBeInTheDocument()
   })
 
   it('dentro de la USB: cambiar el PIN y nada de crear otra', () => {

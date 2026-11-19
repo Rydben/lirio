@@ -74,12 +74,12 @@ pub fn write_speed(dir: &Path) -> Result<f64, String> {
     Ok(64.0 / secs)
 }
 
-pub const PORTABLE_TXT: &str = "Esta carpeta es Lirio PORTÁTIL.\r\n\
+pub const PORTABLE_TXT: &str = "Esta carpeta es Lirio PORTÁTIL (distinto de Lirio Desktop, el que se instala).\r\n\
 Todo lo de Lirio (configuración, bots, llaves) se guarda aquí dentro, en LirioDatos.\r\n\
 No borres este archivo: es lo que le dice a Lirio que no escriba nada en el PC.\r\n";
 
 pub const LEEME: &str = "LIRIO PORTÁTIL (para jugar en cybers)\r\n\r\n\
-1. Conecta la USB y abre Lirio.exe (no hace falta instalar nada ni ser administrador).\r\n\
+1. Conecta la USB y abre Lirio-Portatil.exe (no hace falta instalar nada ni ser administrador).\r\n\
 2. Escribe tu PIN. Sin el PIN, la USB no sirve de nada si la pierdes.\r\n\
 3. Al terminar, cierra Lirio y quita la USB: no queda nada tuyo en el PC.\r\n\r\n\
 OJO: muchos cybers bloquean los programas que se abren desde una USB o borran todo al reiniciar.\r\n\
@@ -89,7 +89,7 @@ En esta edición va el moderador de Twitch. El editor de vídeo NO va: es demasi
 /// Copia Lirio portátil en `root` (la carpeta `Lirio` de la USB): exe, `portable.txt` y LÉEME.
 pub fn write_portable_files(root: &Path, exe: &Path) -> Result<(), String> {
     std::fs::create_dir_all(portable::data_dir(root)).map_err(|e| e.to_string())?;
-    std::fs::copy(exe, root.join("Lirio.exe")).map_err(|e| format!("no se pudo copiar Lirio: {e}"))?;
+    std::fs::copy(exe, root.join(portable::PORTABLE_EXE)).map_err(|e| format!("no se pudo copiar Lirio: {e}"))?;
     std::fs::write(root.join(portable::MARKER), PORTABLE_TXT).map_err(|e| e.to_string())?;
     std::fs::write(root.join("LEEME.txt"), LEEME).map_err(|e| e.to_string())?;
     Ok(())
@@ -106,7 +106,7 @@ pub fn preflight(letter: &str, free: u64) -> Result<PathBuf, String> {
     if free < MIN_FREE {
         return Err(format!("Hace falta al menos {:.0} GB libres en la USB (hay {:.1} GB)", MIN_FREE as f64 / 1e9, free as f64 / 1e9));
     }
-    let root = PathBuf::from(format!("{l}\\Lirio"));
+    let root = PathBuf::from(format!("{l}\\Lirio-Portatil"));
     if portable::data_dir(&root).join(portable::VAULT).exists() {
         return Err("Esta USB ya tiene un Lirio con su PIN. Ábrelo desde la USB (o borra la carpeta Lirio para empezar de cero).".into());
     }
@@ -183,7 +183,7 @@ mod tests {
         let fake_exe = d.path().join("x.exe");
         std::fs::write(&fake_exe, b"MZ").unwrap();
         write_portable_files(&root, &fake_exe).unwrap();
-        assert!(root.join("Lirio.exe").exists() && root.join(portable::MARKER).exists() && root.join("LirioDatos").is_dir());
+        assert!(root.join(portable::PORTABLE_EXE).exists() && root.join(portable::MARKER).exists() && root.join("LirioDatos").is_dir());
         assert!(std::fs::read_to_string(root.join("LEEME.txt")).unwrap().contains("cyber"));
         assert!(write_speed(&root).unwrap() > 0.0);
         assert!(!root.join(".prueba-velocidad").exists());

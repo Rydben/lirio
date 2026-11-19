@@ -77,7 +77,7 @@ function CreateUsb() {
       )}
       {done && (done.ok ? (
         <div className="ok-text small">
-          <p><Icon name="check" size={16} /> Listo: Lirio está en {done.carpeta}. Abre Lirio.exe desde la USB.</p>
+          <p><Icon name="check" size={16} /> Listo: Lirio Portátil está en {done.carpeta}. Abre Lirio-Portatil.exe desde la USB.</p>
           {(done.avisos ?? []).map((a, i) => <p key={i} className="warn small">{a}</p>)}
         </div>
       ) : <p className="error-text small">No se pudo terminar: {done.error}</p>)}

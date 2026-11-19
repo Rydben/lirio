@@ -539,10 +539,8 @@ async fn check_update(app: tauri::AppHandle) -> Result<Value, String> {
         return Ok(json!({"disponible": false, "motivo": "versión de desarrollo"}));
     };
     if portable::root().is_some() {
-        // en la USB no se usa el instalador (instalaría en el PC del cyber): solo se mira la versión
-        let url = format!("https://github.com/{repo}/releases/latest/download/latest.json");
-        let v: Value = tauri::async_runtime::spawn_blocking(move || ureq::get(&url).timeout(std::time::Duration::from_secs(30)).call()
-            .map_err(|e| e.to_string())?.into_json::<Value>().map_err(|e| e.to_string())).await.map_err(|e| e.to_string())??;
+        // el Portátil mira SU canal (latest-portatil.json); nunca el instalador del Desktop
+        let v: Value = tauri::async_runtime::spawn_blocking(move || portable_manifest(repo)).await.map_err(|e| e.to_string())??;
         let remote = v["version"].as_str().unwrap_or_default().to_string();
         return Ok(json!({"disponible": newer(&remote, env!("CARGO_PKG_VERSION")), "version": remote, "notas": v["notes"]}));
     }
@@ -585,6 +583,7 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn release_info() -> Value {
     json!({"version": env!("CARGO_PKG_VERSION"), "repo": option_env!("LIRIO_REPO"), "portatil": portable::root().is_some(),
+           "edicion": portable::edition(),
            // Lirio abierto con carpetas de prueba: se avisa bien visible para no confundirlo con el de verdad
            "prueba": std::env::var_os("LIRIO_DATOS").is_some() || std::env::var_os("LIRIO_CONFIG").is_some(),
            "datos": data_dir().display().to_string()})
@@ -692,41 +691,57 @@ async fn portable_change_pin(state: State<'_, AppState>, actual: String, nuevo: 
     Ok(())
 }
 
-/// Versión nueva de Lirio portátil: se descarga el zip portátil de la versión, se comprueba la firma del publicador
-/// y se cambia el exe DENTRO de la USB (el que está abierto se renombra: Windows lo permite). Al reabrir, ya es la nueva.
+/// Canal del Portátil: `latest-portatil.json` → {version, notes, archivo}. El Desktop usa latest.json (instalador)
+/// y nunca ve el zip; el Portátil nunca usa el instalador (instalaría en el PC del cyber).
+fn portable_manifest(repo: &str) -> Result<Value, String> {
+    let url = format!("https://github.com/{repo}/releases/latest/download/latest-portatil.json");
+    ureq::get(&url).timeout(std::time::Duration::from_secs(30)).call().map_err(|e| e.to_string())?
+        .into_json::<Value>().map_err(|e| e.to_string())
+}
+
+/// Solo `Lirio-Portatil_<versión>_x64.zip` (nada de rutas ni otros nombres que vengan en el manifiesto)
+pub fn valid_portable_zip_name(n: &str) -> bool {
+    n.strip_prefix("Lirio-Portatil_").and_then(|r| r.strip_suffix("_x64.zip"))
+        .is_some_and(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '.'))
+}
+
+/// Actualiza Lirio Portátil DENTRO de la USB: baja el zip del Portátil, comprueba la firma del publicador y cambia
+/// el exe (el que está abierto se renombra a «.old.exe»: Windows lo permite). Al reabrir, ya es la nueva.
 fn portable_update(root: &std::path::Path, repo: &str) -> Result<String, String> {
+    let manifest = portable_manifest(repo)?;
+    let name = manifest["archivo"].as_str().unwrap_or_default().to_string();
+    if !valid_portable_zip_name(&name) { return Err("el canal del Portátil no trae un zip válido".into()); }
     let base = format!("https://github.com/{repo}/releases/latest/download");
-    let get = |name: &str, max: u64| -> Result<Vec<u8>, String> {
-        let r = ureq::get(&format!("{base}/{name}")).timeout(std::time::Duration::from_secs(600)).call()
-            .map_err(|e| format!("{name}: {e}"))?;
+    let get = |file: &str, max: u64| -> Result<Vec<u8>, String> {
+        let r = ureq::get(&format!("{base}/{file}")).timeout(std::time::Duration::from_secs(600)).call()
+            .map_err(|e| format!("{file}: {e}"))?;
         let mut b = Vec::new();
         std::io::Read::read_to_end(&mut std::io::Read::take(r.into_reader(), max), &mut b).map_err(|e| e.to_string())?;
         Ok(b)
     };
-    let zip = get(PORTABLE_ZIP, 200 * 1024 * 1024)?;
-    let sig = String::from_utf8(get(&format!("{PORTABLE_ZIP}.sig"), 4096)?).map_err(|e| e.to_string())?;
+    let zip = get(&name, 200 * 1024 * 1024)?;
+    let sig = String::from_utf8(get(&format!("{name}.sig"), 4096)?).map_err(|e| e.to_string())?;
     catalog::verify_signature(&zip, &sig, catalog::PUBLISHER_KEY)?;
     let stage = portable::data_dir(root).join("actualizacion");
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).map_err(|e| e.to_string())?;
-    let zpath = stage.join(PORTABLE_ZIP);
+    let zpath = stage.join(&name);
     std::fs::write(&zpath, &zip).map_err(|e| e.to_string())?;
     installer::extract_zip(&zpath, &stage)?;
-    let new_exe = stage.join("Lirio.exe");
-    if !new_exe.exists() { return Err("el zip portátil no trae Lirio.exe".into()); }
+    let new_exe = stage.join(portable::PORTABLE_EXE);
+    if !new_exe.exists() { return Err(format!("el zip no trae {}", portable::PORTABLE_EXE)); }
     let cur = std::env::current_exe().map_err(|e| e.to_string())?;
-    let old = root.join("Lirio.old.exe");
+    let stem = cur.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Lirio-Portatil".into());
+    let old = root.join(format!("{stem}.old.exe"));
     let _ = std::fs::remove_file(&old);
     std::fs::rename(&cur, &old).map_err(|e| format!("no se pudo apartar el Lirio abierto: {e}"))?;
-    if let Err(e) = std::fs::copy(&new_exe, root.join("Lirio.exe")) {
+    if let Err(e) = std::fs::copy(&new_exe, &cur) {
         let _ = std::fs::rename(&old, &cur); // si falla, se deja todo como estaba
         return Err(format!("no se pudo copiar el Lirio nuevo: {e}"));
     }
     let _ = std::fs::remove_dir_all(&stage);
-    Ok(root.join("Lirio.exe").display().to_string())
+    Ok(cur.display().to_string())
 }
-
-pub const PORTABLE_ZIP: &str = "Lirio_portatil_x64.zip";
 
 fn newer(remote: &str, local: &str) -> bool {
     let parse = |v: &str| v.trim_start_matches('v').split('.').map(|x| x.parse::<u32>().unwrap_or(0)).collect::<Vec<_>>();
@@ -855,7 +870,7 @@ pub fn run() {
             move |app| {
                 // la ventana se crea aquí para poder llevar la caché de WebView2 a la USB en modo portátil
                 if let Some(conf) = app.config().app.windows.first().cloned() {
-                    let mut b = tauri::WebviewWindowBuilder::from_config(app.handle(), &conf)?;
+                    let mut b = tauri::WebviewWindowBuilder::from_config(app.handle(), &conf)?.title(portable::edition());
                     if let Some(d) = &webview_dir { b = b.data_directory(d.clone()); }
                     b.build()?;
                 }
@@ -890,6 +905,15 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn portable_channel_only_accepts_its_own_zip() {
+        assert!(valid_portable_zip_name("Lirio-Portatil_0.2.6_x64.zip"));
+        assert!(!valid_portable_zip_name("Lirio-Desktop_0.2.6_x64-setup.exe"));
+        assert!(!valid_portable_zip_name("../Lirio-Portatil_0.2.6_x64.zip"));
+        assert!(!valid_portable_zip_name("Lirio-Portatil_x_x64.zip"));
+        assert!(!valid_portable_zip_name("Lirio-Portatil__x64.zip"));
+    }
 
     #[test]
     fn unexpected_close_only_without_reboot() {

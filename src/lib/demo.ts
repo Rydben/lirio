@@ -178,7 +178,7 @@ export const demo = {
       case 'usb_create':
         fire('usb', [{ paso: 'velocidad', detalle: 'Midiendo la velocidad de la USB…', percent: null, hecho: false },
           { paso: 'bot', detalle: 'Moderador de Twitch: Descargando librerías', percent: 50, hecho: false },
-          { hecho: true, ok: true, avisos: [], carpeta: 'E:\\Lirio' }])
+          { hecho: true, ok: true, avisos: [], carpeta: 'E:\\Lirio-Portatil' }])
         return undefined as T
       case 'help_paths': return { programa: 'C:\\Users\\Ana\\AppData\\Local\\Lirio', datos: 'C:\\Users\\Ana\\AppData\\Local\\LirioDatos' } as T
       case 'last_session': return { cerrado_de_golpe: false } as T
@@ -195,7 +195,7 @@ export const demo = {
         fire('ollama', [10, 45, 80, 100].map((p) => ({ estado: 'descargando', percent: p, hecho: false })).concat([{ hecho: true, ok: true } as any]))
         return undefined as T
       case 'install_client_secret': return 'Credenciales guardadas. Ahora pulsa «Autorizar YouTube».' as T
-      case 'release_info': return { version: '0.2.0', repo: 'ejemplo/lirio' } as T
+      case 'release_info': return { version: '0.2.0', repo: 'ejemplo/lirio', portatil: false, edicion: 'Lirio Desktop' } as T
       case 'check_update': return { disponible: false } as T
       case 'gesture_begin': return 'demo-token' as T
       case 'approver_key': return { alg: 'ed25519', llave_publica: 'DEMO', id: 'lirio-demo' } as T

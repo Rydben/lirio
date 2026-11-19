@@ -18,6 +18,15 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 pub const MARKER: &str = "portable.txt";
+/// Nombre visible de cada edición (el programa por dentro sigue siendo «Lirio»)
+pub const DESKTOP: &str = "Lirio Desktop";
+pub const PORTATIL: &str = "Lirio Portátil";
+/// Nombre del exe en la USB
+pub const PORTABLE_EXE: &str = "Lirio-Portatil.exe";
+
+pub fn edition() -> &'static str {
+    if root().is_some() { PORTATIL } else { DESKTOP }
+}
 pub const VAULT: &str = "llavero.pin";
 pub const PIN_MIN: usize = 6;
 /// Variable con la que el bot recibe la clave de sus secretos (solo en el proceso del bot)
@@ -59,8 +68,10 @@ pub fn prepare(root: &Path) -> Result<(), String> {
         std::env::set_var(k, &v);
     }
     std::env::set_var("LIRIO_PORTATIL", "1");
-    // limpia lo temporal de la sesión anterior (en la USB) y una actualización ya aplicada
-    let _ = std::fs::remove_file(root.join("Lirio.old.exe"));
+    // borra el exe viejo de una actualización ya aplicada (en la USB)
+    for e in std::fs::read_dir(root).into_iter().flatten().flatten() {
+        if e.file_name().to_string_lossy().ends_with(".old.exe") { let _ = std::fs::remove_file(e.path()); }
+    }
     // WebView2: el del PC, o el «runtime fijo» si viene en la USB (carpeta WebView2)
     let fixed = root.join("WebView2");
     if fixed.join("msedgewebview2.exe").exists() {

@@ -271,7 +271,7 @@ export const api = {
   ollamaPull: (model: string) => call<void>('ollama_pull', { model }),
   ollamaSetup: (model: string) => call<void>('ollama_setup', { model }),
   installClientSecret: (id: string, path: string) => call<string>('install_client_secret', { id, path }),
-  releaseInfo: () => call<{ version: string; repo: string | null; prueba?: boolean; datos?: string; portatil?: boolean }>('release_info'),
+  releaseInfo: () => call<{ version: string; repo: string | null; prueba?: boolean; datos?: string; portatil?: boolean; edicion?: string }>('release_info'),
   checkUpdate: () => call<{ disponible: boolean; version?: string; notas?: string; motivo?: string }>('check_update'),
   installUpdate: () => call<void>('install_update'),
   onInstall: (cb: (e: InstallEvent) => void): Promise<UnlistenFn> =>

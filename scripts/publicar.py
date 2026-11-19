@@ -47,9 +47,9 @@ PORTABLE_TXT = (
     "No borres este archivo: es lo que le dice a Lirio que no escriba nada en el PC.\r\n"
 )
 LEEME_PORTATIL = (
-    "LIRIO PORTÁTIL (para jugar en cybers)\r\n"
+    "LIRIO PORTÁTIL (para jugar en cybers). Es distinto de Lirio Desktop, el que se instala.\r\n"
     "\r\n"
-    "1. Descomprime esta carpeta en tu USB (mejor USB 3.0) y abre Lirio.exe: sin instalar nada ni ser administrador.\r\n"
+    "1. Descomprime esta carpeta en tu USB (mejor USB 3.0) y abre Lirio-Portatil.exe: sin instalar nada ni ser administrador.\r\n"
     "2. La primera vez elige un PIN. Sin el PIN, la USB no sirve de nada si la pierdes.\r\n"
     "3. Lirio instalará el moderador de Twitch DENTRO de la USB (hacen falta unos 4 GB libres).\r\n"
     "4. Al terminar, cierra Lirio y quita la USB: no queda nada tuyo en el PC.\r\n"
@@ -108,19 +108,25 @@ def main(argv: list[str] | None = None) -> int:
     nsis = TAURI / "target" / "release" / "bundle" / "nsis"
     setup = next(nsis.glob(f"Lirio_{ver}_x64-setup.exe"))
     sig = setup.with_name(setup.name + ".sig")
-    installer_name = f"Lirio_{ver}_x64-setup.exe"
+    # Lirio Desktop (el que se instala). El nombre interno del programa sigue siendo «Lirio» (carpeta de instalación,
+    # accesos directos y actualizador de quien ya lo tiene): solo cambia el nombre de la descarga.
+    installer_name = f"Lirio-Desktop_{ver}_x64-setup.exe"
     shutil.copy2(setup, out / installer_name)
     shutil.copy2(sig, out / (installer_name + ".sig"))
 
     # 3b. Lirio PORTÁTIL (USB): el mismo exe + portable.txt + LÉEME, firmado con la llave del publicador
     #     (es lo que comprueba la USB al actualizarse; los bots los instala Lirio dentro de la USB)
-    portable_zip = out / "Lirio_portatil_x64.zip"
+    portable_zip = out / f"Lirio-Portatil_{ver}_x64.zip"
     exe = TAURI / "target" / "release" / "lirio.exe"
     with zipfile.ZipFile(portable_zip, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(exe, "Lirio.exe")
+        z.write(exe, "Lirio-Portatil.exe")
         z.writestr("portable.txt", PORTABLE_TXT)
         z.writestr("LEEME.txt", LEEME_PORTATIL)
     run([PUBLICAR, "firmar", portable_zip])
+    # canal de actualizaciones SOLO del Portátil (el Desktop usa latest.json y nunca ve el zip)
+    (out / "latest-portatil.json").write_text(json.dumps(
+        {"edicion": "portatil", "version": ver, "notes": args.notas or f"Lirio Portátil {ver}", "archivo": portable_zip.name},
+        indent=2, ensure_ascii=False), encoding="utf-8")
 
     # 4. latest.json para el actualizador
     latest = {
@@ -133,6 +139,12 @@ def main(argv: list[str] | None = None) -> int:
         }},
     }
     (out / "latest.json").write_text(json.dumps(latest, indent=2, ensure_ascii=False), encoding="utf-8")
+    # notas de la release: dos descargas claramente separadas
+    (out / "notas_release.md").write_text(
+        f"{latest['notes']}\n\n"
+        f"**Lirio Desktop** (se instala en tu PC): `{installer_name}`\n\n"
+        f"**Lirio Portátil** (en una USB, para cybers; solo el moderador): `{portable_zip.name}`. "
+        "Descomprímelo en la USB y abre Lirio-Portatil.exe.\n", encoding="utf-8")
 
     print(f"\nPreparado en {out}:")
     for f in sorted(out.iterdir()):
@@ -149,7 +161,7 @@ def gh_exe() -> str | None:
 
 def upload(args, ver: str, out: Path, latest: dict) -> int:
     """5. Publicar (The Wall, regla 3: solo con la confirmación escrita de una persona en su terminal)."""
-    files = sorted(out.iterdir())
+    files = sorted(f for f in out.iterdir() if f.name != "notas_release.md")
     gh = gh_exe()
     if gh is None:
         raise SystemExit("Falta la herramienta `gh` de GitHub para subir. No se ha publicado nada.")
@@ -163,7 +175,7 @@ def upload(args, ver: str, out: Path, latest: dict) -> int:
         print("Cancelado. No se ha publicado nada.")
         return 1
     run([gh, "release", "create", f"v{ver}", "--repo", args.repo, "--title", f"Lirio {ver}",
-         "--notes", latest["notes"], *files])
+         "--notes", (out / "notas_release.md").read_text(encoding="utf-8"), *files])
     print(f"\nPublicado: https://github.com/{args.repo}/releases/tag/v{ver}")
     return 0
 

@@ -75,7 +75,7 @@ export function SettingsPage() {
 /** Busca versiones nuevas (firmadas por el creador en GitHub Releases) e instala con un clic. */
 function Updates() {
   const toast = useToast()
-  const [info, setInfo] = useState<{ version: string; repo: string | null } | null>(null)
+  const [info, setInfo] = useState<{ version: string; repo: string | null; edicion?: string } | null>(null)
   const [state, setState] = useState<{ disponible: boolean; version?: string; notas?: string; motivo?: string } | null>(null)
   const [busy, setBusy] = useState(false)
   useEffect(() => { api.releaseInfo().then(setInfo).catch(() => {}) }, [])
@@ -91,7 +91,8 @@ function Updates() {
   return (
     <section className="panel">
       <h3><Icon name="refresh" size={18} /> Actualizaciones</h3>
-      <p className="muted small">Versión {info?.version ?? '…'}. Solo se instalan versiones firmadas por el creador de Lirio.</p>
+      <p className="muted small"><b>{info?.edicion ?? 'Lirio'}</b> · versión {info?.version ?? '…'}. Solo se instalan versiones firmadas por el creador de Lirio
+        {info?.edicion === 'Lirio Portátil' ? ' (la USB se actualiza sola, sin instalar nada en el PC).' : '.'}</p>
       {state?.disponible && (
         <div className="upload-live">
           <div className="cell-title">Hay una versión nueva: {state.version}</div>
