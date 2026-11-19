@@ -14,6 +14,7 @@ import { TrashPanel } from '../components/TrashPanel'
 import { Insights } from '../components/Insights'
 import { SettingsForm } from '../components/SettingsForm'
 import { TwitchConnect } from '../components/TwitchConnect'
+import { YouTubeConnection } from '../components/YouTubeConnection'
 import { VoiceCommandTester } from '../components/VoiceCommandTester'
 import { VoiceRecorder } from '../components/VoiceRecorder'
 import { HoldButton } from '../components/HoldButton'
@@ -331,11 +332,6 @@ function Queue({ bot, details, reload }: { bot: BotView; details: Details; reloa
     }
     reload()
   }
-  const auth = async () => {
-    toast('info', 'Se abrirá tu navegador para que autorices a YouTube…')
-    const r = await api.run(bot.id, 'auth')
-    toast(r.ok ? 'ok' : 'error', r.ok ? 'YouTube autorizado.' : r.message)
-  }
 
   return (
     <div className="stack">
@@ -343,12 +339,12 @@ function Queue({ bot, details, reload }: { bot: BotView; details: Details; reloa
         <header className="section-head">
           <h3>Subida a YouTube</h3>
           <div className="row">
-            {waitingAuth && <button className="btn btn--ghost" onClick={auth}><Icon name="key" size={16} /> Autorizar YouTube</button>}
             <button className="btn btn--primary" disabled={!!up || pending.length === 0} onClick={() => start()}>
               <Icon name="upload" size={16} /> Subir la cola ahora
             </button>
           </div>
         </header>
+        <YouTubeConnection botId={bot.id} waitingAuth={waitingAuth} lastError={last?.result && !last.result.ok ? last.result.message : null} />
         {up ? (
           <div className="upload-live" data-testid="upload-progress">
             <div className="muted small">Subiendo {up.item ?? '…'}</div>

@@ -42,6 +42,7 @@ p { margin: .35rem 0; line-height: 1.45; }
 .accent { color: var(--violet-soft); }
 .ok-text { color: var(--green); }
 .error-text { color: #fb7185; }
+.warning-text { color: #fcd34d; }
 .warn { color: var(--amber); display: flex; gap: .4rem; align-items: center; }
 .icon { flex: none; }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }

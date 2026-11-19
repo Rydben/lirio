@@ -20,6 +20,7 @@ mod modules;
 mod upload;
 pub mod winutil;
 mod wizard;
+mod youtube;
 
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -891,7 +892,7 @@ pub fn run() {
             wizard::ollama_pull, wizard::ollama_setup, wizard::install_client_secret, wizard::gpu_status, wizard::install_gpu, release_info, check_update, install_update,
             journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions,
             help_paths, last_session, open_bot_folder, thumbnails, signed_approve_deletes,
-            jobs::job_start, jobs::jobs_status, jobs::job_cancel, ui_error,
+            jobs::job_start, jobs::jobs_status, jobs::job_cancel, ui_error, youtube::youtube_status, youtube::youtube_check_file,
             portable_status, portable_create_pin, portable_unlock, portable_change_pin, usb::usb_drives, usb::usb_create
         ])
         .build(tauri::generate_context!())

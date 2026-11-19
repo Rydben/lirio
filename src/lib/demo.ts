@@ -169,6 +169,8 @@ export const demo = {
         return clave as T
       }
       case 'jobs_status': return {} as T
+      case 'youtube_status': return { estado: 'ok', project_id: 'lirio-demo-1', autorizado_en: new Date().toISOString(), dias_restantes: 7, client_secret: true, token: true } as T
+      case 'youtube_check_file': return { tipo: 'installed', project_id: 'lirio-demo-1' } as T
       case 'job_cancel': return true as T
       case 'signed_approve_deletes': return ok as T
       case 'ui_error': return undefined as T

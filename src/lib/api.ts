@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import type { ClientInfo, YouTubeStatus } from './youtube'
 import { demo } from './demo'
 
 export type BotState =
@@ -271,6 +272,8 @@ export const api = {
   ollamaPull: (model: string) => call<void>('ollama_pull', { model }),
   ollamaSetup: (model: string) => call<void>('ollama_setup', { model }),
   installClientSecret: (id: string, path: string) => call<string>('install_client_secret', { id, path }),
+  youtubeStatus: (id: string) => call<YouTubeStatus>('youtube_status', { id }),
+  youtubeCheckFile: (path: string) => call<ClientInfo>('youtube_check_file', { path }),
   releaseInfo: () => call<{ version: string; repo: string | null; prueba?: boolean; datos?: string; portatil?: boolean; edicion?: string }>('release_info'),
   checkUpdate: () => call<{ disponible: boolean; version?: string; notas?: string; motivo?: string }>('check_update'),
   installUpdate: () => call<void>('install_update'),

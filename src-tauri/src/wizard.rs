@@ -370,7 +370,7 @@ pub fn ollama_setup(app: tauri::AppHandle, state: State<AppState>, model: String
 pub fn validate_client_secret(txt: &str) -> Result<(), String> {
     let v: Value = serde_json::from_str(txt).map_err(|_| "ese archivo no es un JSON de Google".to_string())?;
     if v.get("web").is_some() {
-        return Err("es de tipo «Aplicación web»: crea uno de tipo «App de escritorio»".into());
+        return Err("es de tipo «Aplicación web»: crea uno de tipo «Aplicación de escritorio»".into());
     }
     let inst = v.get("installed").ok_or("no parece un archivo de credenciales de Google (falta «installed»)")?;
     let id = inst["client_id"].as_str().unwrap_or("");
@@ -386,6 +386,7 @@ pub fn install_client_secret(state: State<AppState>, id: String, path: String) -
     let m = state.module(&id)?;
     let txt = std::fs::read_to_string(&path).map_err(|e| format!("no se pudo leer el archivo: {e}"))?;
     validate_client_secret(&txt)?;
+    if let Ok(info) = crate::youtube::client_info(&txt) { crate::youtube::remember_project(&state.data_dir, &id, &info); }
     // Ruta estándar de los bots (config `youtube.client_secret` por defecto); el asistente la escribe así en config-inicial
     let dest = m.state_root().join(CLIENT_SECRET_REL);
     if let Some(p) = dest.parent() { std::fs::create_dir_all(p).map_err(|e| e.to_string())?; }

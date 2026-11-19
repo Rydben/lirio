@@ -15,7 +15,8 @@ use crate::{cli, flags, winutil, AppState};
 
 /// Comandos que van siempre como trabajo en segundo plano (los demás, con `run_with` y tiempo límite).
 /// (`editar` vuelve enseguida: a la cola del watcher o en segundo plano; su avance sale en status.json)
-pub const LONG: &[&str] = &["estilo-video", "estilo-miniatura", "miniaturas-generar"];
+/// `auth` también: espera a que el amigo acepte en su navegador (o a que se cancele si Google le enseña un error).
+pub const LONG: &[&str] = &["estilo-video", "estilo-miniatura", "miniaturas-generar", "auth"];
 
 struct Job {
     pid: Option<u32>,
@@ -58,6 +59,7 @@ pub fn job_start(app: tauri::AppHandle, state: State<AppState>, id: String, comm
     }
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::null());
     let journal = crate::journal::Journal::new(&state.data_dir);
+    let data_dir = state.data_dir.clone();
     let name = m.name();
     let k2 = k.clone();
     std::thread::spawn(move || {
@@ -93,6 +95,9 @@ pub fn job_start(app: tauri::AppHandle, state: State<AppState>, id: String, comm
             }
         };
         let cancelled = JOBS.lock().unwrap().get(&k2).is_some_and(|j| j.last["cancelado"] == true);
+        if result.ok && !cancelled && k2.ends_with(":auth") {
+            crate::youtube::mark_authorized(&data_dir, k2.split(':').next().unwrap_or_default(), chrono::Utc::now());
+        }
         journal.add("trabajo", Some(&k2.split(':').next().unwrap_or_default().to_string()),
                     &format!("{name}: {} {}", k2.split(':').nth(1).unwrap_or_default(),
                              if cancelled { "cancelado" } else if result.ok { "hecho" } else { "falló" }), result.ok);
