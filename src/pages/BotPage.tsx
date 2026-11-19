@@ -9,6 +9,7 @@ import { InstallPanel } from '../components/InstallProgress'
 import { LearnedPanel } from '../components/LearnedPanel'
 import { jobDetail, stageName, stalledInput } from '../lib/progress'
 import { StylePanel } from '../components/StylePanel'
+import { CensorPanel } from '../components/CensorPanel'
 import { ThumbnailsPanel } from '../components/ThumbnailsPanel'
 import { TrashPanel } from '../components/TrashPanel'
 import { Insights } from '../components/Insights'
@@ -19,7 +20,7 @@ import { VoiceCommandTester } from '../components/VoiceCommandTester'
 import { VoiceRecorder } from '../components/VoiceRecorder'
 import { HoldButton } from '../components/HoldButton'
 import { Icon, Pill, ProgressBar, timeAgo, useToast } from '../components/ui'
-import { api, pendingApprovals, type BotView, type Details, type QueueItem } from '../lib/api'
+import { api, pendingApprovals, studioUrl, type BotView, type Details, type QueueItem } from '../lib/api'
 import { keyProblem, stateLabel, stateTone } from '../lib/mood'
 import { useStore } from '../lib/store'
 import { useLive } from '../lib/live'
@@ -127,6 +128,7 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
         {tab === 'estilo' && (
           <div className="stack">
             <StylePanel botId={editor.target} kind={styleKind} />
+            {styleKind === 'video' && <CensorPanel botId={editor.target} />}
             {styleKind === 'video' && <LearnedPanel botId={editor.target} />}
           </div>
         )}
@@ -293,6 +295,8 @@ function Summary({ bot, details }: { bot: BotView; details: Details | null }) {
             {last.metrics?.wall_time_s && <><dt>Tardó</dt><dd>{Math.round(last.metrics.wall_time_s / 60)} min</dd></>}
           </dl>
         ) : <p className="muted">Sin trabajos todavía.</p>}
+        {/* hablar poco ya no es un aviso: nota discreta */}
+        {typeof last?.metrics?.mic?.nota === 'string' && <p className="muted small" data-testid="nota-micro">{last.metrics.mic.nota}</p>}
         {details?.quota && <QuotaLine quota={details.quota} />}
       </section>
       )}
@@ -317,6 +321,7 @@ const QUEUE_STATUS: Record<string, [string, 'ok' | 'working' | 'warning' | 'erro
   queued: ['En cola', 'working'], awaiting_approval: ['Esperando tu aprobación', 'warning'],
   waiting_auth: ['Falta autorizar YouTube', 'warning'], scheduled: ['Programado', 'ok'], uploaded: ['Subido', 'ok'],
   published: ['Publicado', 'ok'], failed: ['Falló', 'error'], done: ['Hecho', 'ok'],
+  comprobando: ['YouTube está comprobando el vídeo…', 'working'], rejected: ['Rechazado por YouTube', 'error'],
 }
 
 function Queue({ bot, details, reload }: { bot: BotView; details: Details; reload: () => void }) {
@@ -368,7 +373,15 @@ function Queue({ bot, details, reload }: { bot: BotView; details: Details; reloa
                 const [label, tone] = QUEUE_STATUS[q.status] ?? [q.status, 'muted']
                 return (
                   <tr key={q.id}>
-                    <td><div className="cell-title">{q.title}</div>{q.error && <div className="error-text small">{q.error}</div>}</td>
+                    <td>
+                      <div className="cell-title">{q.title}</div>
+                      {q.error && <div className="error-text small">{q.status === 'rejected' ? `Motivo: ${q.error}` : q.error}</div>}
+                      {q.comprobaciones?.nota && <div className="muted small">{q.comprobaciones.nota}</div>}
+                      {(q.comprobaciones?.riesgos ?? []).map((r) => <div key={r} className="warning-text small">{r}</div>)}
+                      {studioUrl(q.comprobaciones?.studio_url) && (
+                        <button className="link small" onClick={() => api.openUrl(studioUrl(q.comprobaciones?.studio_url)!)}>Abrir en YouTube Studio</button>
+                      )}
+                    </td>
                     <td>{q.kind === 'long' ? 'Vídeo' : 'Short'}</td>
                     <td><Pill tone={tone}>{label}</Pill></td>
                     <td className="muted small">{q.video_id ? <span>youtu.be/{q.video_id}</span> : fmtDate(q.publish_at)}</td>

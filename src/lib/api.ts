@@ -66,7 +66,18 @@ export interface CliResult {
   message: string
 }
 
+export interface Comprobaciones {
+  estado?: 'procesando' | 'procesado' | 'rechazado'; studio_url?: string; nota?: string; riesgos?: string[]
+  youtube?: Record<string, unknown>
+}
+
+/** Solo se abren enlaces de YouTube Studio (vienen del bot). */
+export function studioUrl(u: unknown): string | null {
+  return typeof u === 'string' && /^https:\/\/studio\.youtube\.com\//.test(u) ? u : null
+}
+
 export interface QueueItem {
+  comprobaciones?: Comprobaciones
   id: string
   kind: 'long' | 'short'
   title: string

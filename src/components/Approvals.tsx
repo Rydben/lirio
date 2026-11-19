@@ -1,5 +1,5 @@
 // Tarjetas de aprobación (The Wall): aprobar o rechazar manteniendo pulsado 2 s.
-import { api, type Approval, type BotView, type SignedOperation } from '../lib/api'
+import { api, studioUrl, type Approval, type BotView, type SignedOperation } from '../lib/api'
 import { useStore } from '../lib/store'
 import { HoldButton } from './HoldButton'
 import { Icon, timeAgo, useToast } from './ui'
@@ -51,6 +51,21 @@ const DONE: Record<SignedOperation, string> = {
   reintentar: 'Listo: el bot lo volverá a intentar.',
 }
 
+/** Antes de aprobar una publicación: lo que hay que revisar en YouTube Studio y los riesgos de copyright que vio el editor.
+ *  La API de YouTube no da el resultado de copyright: no se promete «sin copyright». */
+function StudioChecks({ d }: { d: Record<string, unknown> }) {
+  const url = studioUrl(d.studio_url)
+  const riesgos = Array.isArray(d.riesgos_copyright) ? (d.riesgos_copyright as string[]) : []
+  if (!url && !d.revisa && riesgos.length === 0) return null
+  return (
+    <div className="approval__checks" data-testid="comprobaciones-studio">
+      {typeof d.revisa === 'string' && <p className="small">{d.revisa}</p>}
+      {riesgos.length > 0 && <ul className="small warning-text">{riesgos.map((r) => <li key={r}>{r}</li>)}</ul>}
+      {url && <button className="btn btn--outline small" onClick={() => api.openUrl(url)}>Abrir Comprobaciones en YouTube Studio</button>}
+    </div>
+  )
+}
+
 export function ApprovalCard({ bot, a }: { bot: BotView; a: Approval }) {
   const decide = useSignedDecision()
   const supported = bot.commands.includes('aprobar-firmado')
@@ -63,6 +78,7 @@ export function ApprovalCard({ bot, a }: { bot: BotView; a: Approval }) {
         {detail && <div className="approval__detail">{detail}</div>}
         <div className="approval__meta">{bot.name} · {timeAgo(a.created_at)} · solicitud {a.id}</div>
         {!supported && <div className="approval__warn">Este bot aún no acepta aprobaciones desde Lirio.</div>}
+        <StudioChecks d={a.details ?? {}} />
       </div>
       <div className="approval__actions">
         <HoldButton tone="ghost" disabled={!supported} onBegin={api.gestureBegin}

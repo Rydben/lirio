@@ -54,6 +54,10 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("estilo-chat", &[("@mensaje", Kind::LongText)]),
     ("estilo-instruccion", &[("@texto", Kind::LongText)]),
     ("estilo-borrar", &[("@que", Kind::Text)]),
+    // censura de palabrotas del editor
+    ("censura", &[]),
+    ("censura-anadir", &[("@texto", Kind::Text)]),
+    ("censura-quitar", &[("@texto", Kind::Text)]),
     ("estilo-video", &[("@archivo", Kind::Path)]),
     ("estilo-miniatura", &[("@archivo", Kind::Path)]),
     // Ajustes aprendidos de las estadísticas: verlos, borrar uno (o todo) y el interruptor general
@@ -220,6 +224,8 @@ mod tests {
         assert!(build_args("estilo-chat", &m(json!({"@mensaje": "a".repeat(300)}))).is_ok());
         assert!(build_args("estilo-chat", &m(json!({"@mensaje": "a".repeat(501)}))).is_err());
         assert_eq!(build_args("estilo-borrar", &m(json!({"@que": "video"}))).unwrap(), vec!["video"]);
+        assert_eq!(build_args("censura-anadir", &m(json!({"@texto": "me cago en"}))).unwrap(), vec!["me cago en"]);
+        assert!(build_args("censura", &m(json!({"--borrar-todo": true}))).is_err());
         assert_eq!(build_args("aprendido-activar", &m(json!({"@valor": "no"}))).unwrap(), vec!["no"]);
         assert!(build_args("aprendido-activar", &m(json!({"@valor": "quizas"}))).is_err());
     }

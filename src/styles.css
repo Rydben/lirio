@@ -273,6 +273,10 @@ p { margin: .35rem 0; line-height: 1.45; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { border: 1px solid var(--line-2); background: var(--bg-2); border-radius: 999px; padding: 6px 12px; font-size: .85rem; }
 .chip.is-active { border-color: var(--cyan); color: var(--cyan); }
+.chip button { border: 0; background: none; color: var(--muted); margin-left: 6px; padding: 0; vertical-align: middle; cursor: pointer; }
+.chip button:hover { color: var(--text); }
+.approval__checks { margin-top: 8px; display: grid; gap: 6px; }
+.approval__checks ul { margin: 0; padding-left: 1.2em; }
 
 @keyframes float { 50% { transform: translate3d(0, -6px, 0); } }
 @keyframes blink-main { 0%, 92.9%, 97%, 100% { opacity: 1; } 93%, 96.9% { opacity: 0; } }
