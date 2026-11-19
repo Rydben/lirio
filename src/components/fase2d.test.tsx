@@ -74,3 +74,13 @@ describe('aprendido de tus estadísticas', () => {
     expect(await screen.findByText(/Todavía no ha cambiado nada/)).toBeInTheDocument()
   })
 })
+
+describe('miniaturas con puntos', () => {
+  it('ordena por puntos y enseña «84/100», el tipo y las razones', async () => {
+    const { byPoints } = await import('./ThumbnailsPanel')
+    const ts = [{ archivo: 'a', ruta: 'a', puntos: 60 }, { archivo: 'b', ruta: 'b', puntos: 84 }, { archivo: 'c', ruta: 'c' }]
+    expect(byPoints(ts).map((t) => t.archivo)).toEqual(['b', 'a', 'c'])
+    const old = [{ archivo: 'x', ruta: 'x', puntuacion: 7 }, { archivo: 'y', ruta: 'y', puntuacion: 9 }]
+    expect(byPoints(old).map((t) => t.archivo)).toEqual(['x', 'y']) // editor antiguo: orden de siempre
+  })
+})

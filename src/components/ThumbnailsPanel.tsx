@@ -6,7 +6,20 @@ import { useJob } from '../lib/jobs'
 import { JobProgress } from './JobProgress'
 import { Icon, Pill, useToast } from './ui'
 
-interface Thumb { archivo: string; ruta: string; texto?: string; tipo?: string; puntuacion?: number; elegida?: boolean; img?: string | null }
+interface Thumb {
+  archivo: string; ruta: string; texto?: string; tipo?: string; puntuacion?: number; elegida?: boolean; img?: string | null
+  /** 0-100 (editor nuevo), con las razones cortas de esa nota */
+  puntos?: number; razones?: string[]
+}
+
+const TIPO: Record<string, string> = { cara: 'Con tu cara', juego: 'Solo juego' }
+
+/** Las de más puntos primero (si el editor ya los da); si no, en el orden de siempre. */
+export function byPoints(ts: Thumb[]): Thumb[] {
+  return ts.some((t) => typeof t.puntos === 'number')
+    ? [...ts].sort((a, b) => (b.puntos ?? -1) - (a.puntos ?? -1))
+    : ts
+}
 interface Video { carpeta: string; video: string; titulo?: string; elegida_por?: string; puede_regenerar?: boolean; miniaturas: Thumb[] }
 
 export function ThumbnailsPanel({ botId }: { botId: string }) {
@@ -56,8 +69,8 @@ export function ThumbnailsPanel({ botId }: { botId: string }) {
           </div>
           {regenFor === v.video && <JobProgress job={regen.job} label="Haciendo miniaturas" onCancel={regen.cancel} />}
           <div className="thumbs">
-            {v.miniaturas.map((t) => (
-              <figure key={t.ruta} className={`thumb${t.elegida ? ' is-chosen' : ''}`}>
+            {byPoints(v.miniaturas).map((t) => (
+              <figure key={t.ruta} className={`thumb${t.elegida ? ' is-chosen' : ''}`} title={t.razones?.join(' · ') || undefined}>
                 {t.img ? <img src={t.img} alt={`Miniatura: ${t.texto || v.titulo || v.video}`} loading="lazy" />
                   : <div className="thumb__missing muted small">No se puede ver</div>}
                 <figcaption>
@@ -66,8 +79,11 @@ export function ThumbnailsPanel({ botId }: { botId: string }) {
                       {busy === t.ruta ? 'Guardando…' : 'Usar esta'}
                     </button>
                   )}
-                  {typeof t.puntuacion === 'number' && <span className="muted small">nota {t.puntuacion.toFixed(1)}</span>}
+                  {t.tipo && TIPO[t.tipo] && <span className="muted small">{TIPO[t.tipo]}</span>}
+                  {typeof t.puntos === 'number' ? <span className="small thumb__pts">{Math.round(t.puntos)}/100</span>
+                    : typeof t.puntuacion === 'number' && <span className="muted small">nota {t.puntuacion.toFixed(1)}</span>}
                 </figcaption>
+                {t.razones && t.razones.length > 0 && <p className="thumb__why muted small">{t.razones.join(' · ')}</p>}
               </figure>
             ))}
           </div>

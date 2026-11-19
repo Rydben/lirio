@@ -443,7 +443,9 @@ input.input:focus, select.input:focus { border-color: var(--cyan); outline: none
 .thumb.is-chosen { border-color: var(--cyan); box-shadow: 0 0 14px rgba(34, 211, 238, .35); }
 .thumb img, .thumb__missing { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .thumb__missing { display: grid; place-items: center; }
-.thumb figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; }
+.thumb figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 10px; }
+.thumb__pts { font-weight: 700; font-variant-numeric: tabular-nums; }
+.thumb__why { margin: 0; padding: 0 10px 10px; line-height: 1.35; }
 .style-chat { display: flex; flex-direction: column; gap: 10px; }
 .style-chat__log { display: flex; flex-direction: column; gap: 8px; max-height: 320px; min-height: 120px; overflow-y: auto; padding: 4px; }
 .bubble { max-width: 85%; padding: 9px 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
