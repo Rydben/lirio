@@ -242,3 +242,46 @@ mod unidades_reales {
         for l in ["C:", "D:", "E:"] { println!("{l} bus={:?}", super::bus_type(l)); }
     }
 }
+
+#[cfg(test)]
+mod usb_real {
+    /// Crea Lirio Portátil de verdad en una carpeta (de una USB) y prueba el moderador desde ahí. No corre por defecto:
+    /// LIRIO_E2E_USB=<carpeta nueva> LIRIO_E2E_PIN=<pin de prueba> LIRIO_E2E_EXE=<lirio.exe> LIRIO_CATALOGO=<dist>
+    ///   cargo test usb_real -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn create_and_run_moderator() {
+        use super::*;
+        let root = PathBuf::from(std::env::var("LIRIO_E2E_USB").unwrap());
+        let pin = std::env::var("LIRIO_E2E_PIN").unwrap();
+        let exe = PathBuf::from(std::env::var("LIRIO_E2E_EXE").unwrap());
+        assert!(!root.exists(), "la carpeta de prueba tiene que ser nueva");
+        let t0 = std::time::Instant::now();
+        let mut avisos = vec![];
+        let mut last = String::new();
+        create_portable(&root, &pin, "Prueba", &exe, &mut avisos, &mut |paso, detalle, _| {
+            let key = format!("{paso}:{}", detalle.split(':').next().unwrap_or(""));
+            if key != last { println!("[{paso}] {detalle}"); last = key; }
+        }).unwrap();
+        println!("creado en {} s; avisos: {avisos:?}", t0.elapsed().as_secs());
+        // el moderador, desde la USB, en modo portátil y con la clave de sus secretos (sacada del llavero con el PIN)
+        let data = portable::data_dir(&root);
+        let s = portable::open(&data.join(portable::VAULT), &pin).unwrap();
+        assert!(portable::open(&data.join(portable::VAULT), "pin-equivocado-0").is_err());
+        let cfg = LirioConfig::load_with(&data.join("config.json"), false);
+        assert!(cfg.modulos.iter().all(|m| m.ruta.starts_with(&root)), "rutas dentro de la USB");
+        let raw = std::fs::read_to_string(data.join("config.json")).unwrap();
+        assert!(!raw.contains(":\\\\"), "config sin letra de unidad: {raw}");
+        let (mods, _) = crate::modules::discover(&cfg);
+        let m = mods.iter().find(|m| m.id == "twitch-moderator").expect("moderador");
+        let pinned = m.pinned_key();
+        assert_eq!(pinned["llave_publica"].as_str().unwrap(), Approver::public_info_of(&s.approver_seed).llave_publica, "llave del llavero fijada");
+        let mut c = crate::cli::build_command(m, "doctor", &[]).unwrap();
+        for (k, v) in portable::env_vars(&data) { c.env(k, v); }
+        c.env("LIRIO_PORTATIL", "1").env(portable::BOT_KEY_ENV, portable::hex(&s.bot_key));
+        let out = c.output().unwrap();
+        let r = crate::cli::interpret(out.status.code().unwrap_or(-1), &out.stdout, &out.stderr);
+        println!("doctor: code={} portatil={} secretos={}", r.code, r.data["portatil"], r.data["secretos"]);
+        assert!(r.data["portatil"]["activo"] == true, "el moderador sabe que está en la USB");
+    }
+}
