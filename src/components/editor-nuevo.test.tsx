@@ -52,3 +52,22 @@ describe('publicar después de las comprobaciones de YouTube', () => {
     expect(open).toHaveBeenCalledWith('https://studio.youtube.com/video/abc/edit')
   })
 })
+
+describe('moderación visual antes de publicar', () => {
+  it('enseña lo difuminado, lo dudoso, las capturas y lo que no detecta; la revisión obligatoria se nota', async () => {
+    vi.spyOn(api, 'overview').mockResolvedValue({ usuario: 'A', modules: [], errors: [], uploads: [] } as never)
+    const caps = vi.spyOn(api, 'moderationCaptures').mockResolvedValue(['data:image/jpeg;base64,AAAA', null])
+    const bot = { id: 'ed', name: 'Editor', commands: ['aprobar-firmado'] } as unknown as BotView
+    const a = { id: 'r2', action: 'youtube.publicar_tras_revision', status: 'pending', details: { title: 'Directo',
+      moderacion: { grave: true, difuminado: 3, revisar: 1, nota: 'Había un correo y un desnudo: difuminados.',
+        capturas: ['C:/out/v/v_youtube_moderacion/c1.jpg', 'C:/otra/x.jpg'] } } } as Approval
+    render(<ToastProvider><StoreProvider><ApprovalCard bot={bot} a={a} /></StoreProvider></ToastProvider>)
+    expect(screen.getByText(/Revisión obligatoria/)).toBeInTheDocument()
+    expect(screen.getByText(/3 zonas difuminadas/)).toBeInTheDocument()
+    expect(screen.getByText(/1 dudosa para revisar/)).toBeInTheDocument()
+    expect(screen.getByText(/No detecta violencia/)).toBeInTheDocument()
+    expect(screen.getByTestId('moderacion')).toHaveClass('is-grave')
+    await waitFor(() => expect(screen.getAllByRole('img')).toHaveLength(1)) // la ruta rechazada por el núcleo no sale
+    expect(caps).toHaveBeenCalledWith('ed', a.details!.moderacion && (a.details!.moderacion as any).capturas)
+  })
+})

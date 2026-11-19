@@ -293,6 +293,7 @@ export const api = {
   ollamaPull: (model: string) => call<void>('ollama_pull', { model }),
   ollamaSetup: (model: string) => call<void>('ollama_setup', { model }),
   installClientSecret: (id: string, path: string) => call<string>('install_client_secret', { id, path }),
+  moderationCaptures: (id: string, rutas: string[]) => call<(string | null)[]>('moderation_captures', { id, rutas }),
   monetizacionDatos: () => call<unknown>('monetizacion_datos'),
   youtubeStatus: (id: string) => call<YouTubeStatus>('youtube_status', { id }),
   youtubeCheckFile: (path: string) => call<ClientInfo>('youtube_check_file', { path }),

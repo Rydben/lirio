@@ -1,4 +1,5 @@
 // Tarjetas de aprobación (The Wall): aprobar o rechazar manteniendo pulsado 2 s.
+import { useEffect, useState } from 'react'
 import { api, studioUrl, type Approval, type BotView, type SignedOperation } from '../lib/api'
 import { useStore } from '../lib/store'
 import { HoldButton } from './HoldButton'
@@ -7,6 +8,7 @@ import { Icon, timeAgo, useToast } from './ui'
 const ACTION_TEXT: Record<string, string> = {
   'youtube.schedule_publish': 'Programar la publicación en YouTube (se hará público a la hora indicada)',
   'youtube.publish_public': 'Publicar en YouTube en público ahora',
+  'youtube.publicar_tras_revision': 'Revisión obligatoria: el vídeo tenía contenido sensible (difuminado). Míralo antes de publicar',
   'youtube.publish_unlisted': 'Subir a YouTube como oculto',
   'youtube.upload_private': 'Subir a YouTube como privado',
   'files.delete_source_download': 'Borrar el VOD descargado (ya editado)',
@@ -66,6 +68,40 @@ function StudioChecks({ d }: { d: Record<string, unknown> }) {
   )
 }
 
+const NO_DETECTA = 'No detecta violencia o gore reales ni nombres reales sueltos: eso revísalo tú en el vídeo.'
+
+/** Informe de moderación visual del editor (desnudos y datos personales difuminados): antes de aprobar publicar.
+ *  Las capturas salen del vídeo ya difuminado; Lirio solo enseña las de la carpeta de moderación del propio bot. */
+export function ModerationReport({ botId, d }: { botId: string; d: Record<string, unknown> }) {
+  const m = (d.moderacion ?? null) as { grave?: boolean; difuminado?: number; revisar?: number; capturas?: string[]; nota?: string; no_detecta?: string } | null
+  const rutas = m?.capturas ?? []
+  const [imgs, setImgs] = useState<(string | null)[]>([])
+  useEffect(() => {
+    if (rutas.length === 0) return
+    let alive = true
+    api.moderationCaptures(botId, rutas).then((r) => { if (alive) setImgs(r) }).catch(() => {})
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [botId, rutas.join('|')])
+  if (!m) return null
+  const n = (v: unknown) => (typeof v === 'number' ? v : 0)
+  return (
+    <div className={`approval__moderation${m.grave ? ' is-grave' : ''}`} data-testid="moderacion">
+      <div className="small">
+        <b>Moderación visual:</b> {n(m.difuminado)} {n(m.difuminado) === 1 ? 'zona difuminada' : 'zonas difuminadas'}
+        {n(m.revisar) > 0 && <> · {n(m.revisar)} {n(m.revisar) === 1 ? 'dudosa para revisar' : 'dudosas para revisar'}</>}
+      </div>
+      {m.nota && <p className={`small ${m.grave ? 'warning-text' : 'muted'}`}>{m.nota}</p>}
+      {imgs.some(Boolean) && (
+        <div className="moderation__strip">
+          {imgs.map((src, i) => src && <img key={rutas[i]} src={src} alt={`Captura difuminada ${i + 1}: ${rutas[i].split(/[\\/]/).pop()}`} loading="lazy" />)}
+        </div>
+      )}
+      <p className="muted small">{m.no_detecta ?? NO_DETECTA}</p>
+    </div>
+  )
+}
+
 export function ApprovalCard({ bot, a }: { bot: BotView; a: Approval }) {
   const decide = useSignedDecision()
   const supported = bot.commands.includes('aprobar-firmado')
@@ -78,6 +114,7 @@ export function ApprovalCard({ bot, a }: { bot: BotView; a: Approval }) {
         {detail && <div className="approval__detail">{detail}</div>}
         <div className="approval__meta">{bot.name} · {timeAgo(a.created_at)} · solicitud {a.id}</div>
         {!supported && <div className="approval__warn">Este bot aún no acepta aprobaciones desde Lirio.</div>}
+        <ModerationReport botId={bot.id} d={a.details ?? {}} />
         <StudioChecks d={a.details ?? {}} />
       </div>
       <div className="approval__actions">

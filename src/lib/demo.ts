@@ -176,6 +176,7 @@ export const demo = {
       }
       case 'jobs_status': return {} as T
       case 'monetizacion_datos': return null as T
+      case 'moderation_captures': return ((args?.rutas as string[]) ?? []).map(() => null) as T
       case 'youtube_status': return { estado: 'ok', project_id: 'lirio-demo-1', autorizado_en: new Date().toISOString(), dias_restantes: 7, client_secret: true, token: true } as T
       case 'youtube_check_file': return { tipo: 'installed', project_id: 'lirio-demo-1' } as T
       case 'job_cancel': return true as T

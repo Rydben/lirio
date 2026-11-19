@@ -637,6 +637,26 @@ pub fn small_image_data_url(p: &std::path::Path, cache: &std::path::Path) -> Opt
     }
 }
 
+/// ¿Es una captura del informe de moderación de este bot? Solo imágenes dentro de su carpeta de vídeos, en una carpeta
+/// `*_moderacion` (el editor las saca del vídeo ya difuminado). Cualquier otra ruta se rechaza.
+pub fn moderation_capture_ok(root: &std::path::Path, p: &std::path::Path) -> bool {
+    let (Ok(root), Ok(p)) = (root.canonicalize(), p.canonicalize()) else { return false };
+    let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    p.starts_with(&root) && matches!(ext.as_str(), "jpg" | "jpeg" | "png")
+        && p.parent().and_then(|d| d.file_name()).is_some_and(|n| n.to_string_lossy().ends_with("_moderacion"))
+}
+
+/// Capturas del informe de moderación para enseñarlas antes de aprobar (como mucho 12).
+#[tauri::command]
+fn moderation_captures(state: State<AppState>, id: String, rutas: Vec<String>) -> Result<Vec<Option<String>>, String> {
+    let m = state.module(&id)?;
+    let root = m.state_root().join("output");
+    Ok(rutas.iter().take(12).map(|r| {
+        let p = std::path::Path::new(r);
+        moderation_capture_ok(&root, p).then(|| image_data_url(p)).flatten()
+    }).collect())
+}
+
 /// Miniaturas de cada vídeo (`miniaturas` del editor) con la imagen ya leída: Lirio solo lee las que el bot lista.
 #[tauri::command]
 async fn thumbnails(state: State<'_, AppState>, id: String) -> Result<cli::CliResult, String> {
@@ -940,7 +960,7 @@ pub fn run() {
             wizard::ollama_pull, wizard::ollama_setup, wizard::install_client_secret, wizard::gpu_status, wizard::install_gpu, release_info, check_update, install_update,
             journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions,
             help_paths, last_session, open_bot_folder, thumbnails, signed_approve_deletes,
-            jobs::job_start, jobs::jobs_status, jobs::job_cancel, ui_error, youtube::youtube_status, youtube::youtube_check_file, monetizacion::monetizacion_datos,
+            jobs::job_start, jobs::jobs_status, jobs::job_cancel, ui_error, youtube::youtube_status, youtube::youtube_check_file, monetizacion::monetizacion_datos, moderation_captures,
             portable_status, portable_create_pin, portable_unlock, portable_change_pin, usb::usb_drives, usb::usb_create
         ])
         .build(tauri::generate_context!())
@@ -954,6 +974,22 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn moderation_captures_only_from_the_bot_folder() {
+        let d = tempfile::tempdir().unwrap();
+        let out = d.path().join("output");
+        let ok_dir = out.join("v1").join("v1_youtube_moderacion");
+        std::fs::create_dir_all(&ok_dir).unwrap();
+        std::fs::write(ok_dir.join("c1.jpg"), b"x").unwrap();
+        std::fs::write(out.join("v1").join("v1.jpg"), b"x").unwrap();
+        std::fs::write(d.path().join("fuera_moderacion.jpg"), b"x").unwrap();
+        std::fs::write(ok_dir.join("nota.txt"), b"x").unwrap();
+        assert!(moderation_capture_ok(&out, &ok_dir.join("c1.jpg")));
+        assert!(!moderation_capture_ok(&out, &out.join("v1").join("v1.jpg")), "no es del informe");
+        assert!(!moderation_capture_ok(&out, &ok_dir.join("nota.txt")), "no es imagen");
+        assert!(!moderation_capture_ok(&out, &ok_dir.join("..").join("..").join("..").join("fuera_moderacion.jpg")), "fuera de la carpeta");
+    }
 
     #[test]
     fn thumbnails_are_shrunk_and_cached() {

@@ -321,7 +321,7 @@ const QUEUE_STATUS: Record<string, [string, 'ok' | 'working' | 'warning' | 'erro
   queued: ['En cola', 'working'], awaiting_approval: ['Esperando tu aprobación', 'warning'],
   waiting_auth: ['Falta autorizar YouTube', 'warning'], scheduled: ['Programado', 'ok'], uploaded: ['Subido', 'ok'],
   published: ['Publicado', 'ok'], failed: ['Falló', 'error'], done: ['Hecho', 'ok'],
-  comprobando: ['YouTube está comprobando el vídeo…', 'working'], rejected: ['Rechazado por YouTube', 'error'],
+  comprobando: ['YouTube está comprobando el vídeo…', 'working'], awaiting_review: ['Esperando tu revisión', 'warning'], rejected: ['Rechazado por YouTube', 'error'],
 }
 
 function Queue({ bot, details, reload }: { bot: BotView; details: Details; reload: () => void }) {

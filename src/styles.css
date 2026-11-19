@@ -276,6 +276,11 @@ p { margin: .35rem 0; line-height: 1.45; }
 .chip button { border: 0; background: none; color: var(--muted); margin-left: 6px; padding: 0; vertical-align: middle; cursor: pointer; }
 .chip button:hover { color: var(--text); }
 .approval__checks { margin-top: 8px; display: grid; gap: 6px; }
+.approval__moderation { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 6px; }
+.approval__moderation.is-grave { border-color: var(--amber); }
+.approval__moderation p { margin: 0; }
+.moderation__strip { display: flex; gap: 6px; overflow-x: auto; }
+.moderation__strip img { height: 72px; border-radius: 6px; flex: none; }
 .approval__checks ul { margin: 0; padding-left: 1.2em; }
 
 @keyframes float { 50% { transform: translate3d(0, -6px, 0); } }
