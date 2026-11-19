@@ -28,6 +28,8 @@ function useCifras(botId: string, installed: boolean, light: boolean): [Cifras, 
     if (!installed) return
     api.runWith(botId, 'monetizacion', flags).then((r) => {
       if (r.ok && r.data) setC((old) => ({ data: { ...(old.data ?? {}), ...r.data }, error: null, cargando: false }))
+      // sin ninguna cuenta que funcione el bot sale con error pero explica qué falta en `avisos`: se enseña eso
+      else if (Array.isArray(r.data?.avisos) && r.data.avisos.length) setC((old) => ({ data: { ...(old.data ?? {}), ...r.data }, error: null, cargando: false }))
       else setC((old) => ({ ...old, error: problem(r), cargando: false }))
     }).catch((e) => setC((old) => ({ ...old, error: String(e), cargando: false })))
   }, [botId, installed])
@@ -86,13 +88,16 @@ function RealTime({ tw, yt, live }: { tw: Record<string, any> | null; yt: Record
       <h3>Ahora mismo</h3>
       {live ? (
         <>
-          <p className="ok-text small">En directo en Twitch (se actualiza cada 30 s)</p>
+          <p className="ok-text small">En directo en Twitch (se actualiza cada 30 s{d.fuente ? `; datos de: ${d.fuente}` : ''})</p>
           <div className="monet__stats">
             <Stat label="Espectadores" value={n(d.espectadores)} />
             <Stat label="Seguidores nuevos" value={n(d.seguidores_nuevos)} />
-            <Stat label="Subs" value={n(d.subs)} />
+            <Stat label="Subs nuevas" value={n(d.subs)} />
+            <Stat label="Renovaciones" value={n(d.renovaciones)} />
+            <Stat label="Subs regaladas" value={n(d.regalos)} />
             <Stat label="Bits" value={n(d.bits)} />
           </div>
+          {d.motivos && Object.entries(d.motivos as Record<string, string>).map(([k, m]) => <p key={k} className="muted small">{m}</p>)}
         </>
       ) : <p className="muted small">No estás en directo en Twitch. Cuando lo estés, aquí verás espectadores, seguidores nuevos, subs y bits.</p>}
       <div className="monet__stats">

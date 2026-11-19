@@ -33,8 +33,12 @@ export function valueAt(stats: unknown, path: string): number | null {
 /** Por qué no hay un dato: el `motivo` que dé el bot (p. ej. `motivos.seguidores`) o null. */
 export function reasonAt(stats: unknown, path: string): string | null {
   const s = stats as Record<string, any> | null
-  const key = path.split('.').pop()!
-  return s?.motivos?.[path] ?? s?.motivos?.[key] ?? null
+  const parts = path.split('.')
+  const key = parts.pop()!
+  // el motivo puede venir junto al dato (`ultimos_30_dias.motivos.media_espectadores`) o arriba (`motivos.seguidores`)
+  let parent: any = s
+  for (const k of parts) parent = parent?.[k]
+  return parent?.motivos?.[key] ?? s?.motivos?.[path] ?? s?.motivos?.[key] ?? null
 }
 
 export interface Progreso { req: Requisito; valor: number | null; pct: number; hecho: boolean; motivo: string | null }

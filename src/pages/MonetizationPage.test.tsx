@@ -82,3 +82,13 @@ describe('página de Monetización', () => {
     expect(within(screen.getByTestId('plataforma-youtube')).getByText(/Instala el editor/)).toBeInTheDocument()
   })
 })
+
+describe('formato real del moderador', () => {
+  it('lee los motivos que vienen junto al dato', async () => {
+    const { reasonAt } = await import('../lib/monetizacion')
+    const s = { ultimos_30_dias: { media_espectadores: null, motivos: { media_espectadores: 'El bot no midió espectadores en estos días.' } },
+                motivos: { seguidores: 'Conecta la cuenta del streamer.' } }
+    expect(reasonAt(s, 'ultimos_30_dias.media_espectadores')).toMatch(/no midió/)
+    expect(reasonAt(s, 'seguidores')).toMatch(/Conecta/)
+  })
+})
