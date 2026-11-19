@@ -443,3 +443,12 @@ input.input:focus, select.input:focus { border-color: var(--cyan); outline: none
 .job { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
 .job__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .list li { flex-wrap: wrap; }
+
+/* ---------- PIN de la USB ---------- */
+.pin-gate { height: 100%; display: grid; place-items: center; background: radial-gradient(circle at 50% 30%, #1a1236, var(--bg)); padding: 16px; }
+.pin-gate__card { width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; text-align: center;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 20px; padding: 28px; box-shadow: 0 0 40px rgba(139, 92, 246, .18); }
+.pin-gate__card .brand__logo { margin: 0 auto; }
+.pin-gate__card h1 { margin: 4px 0; }
+.pin-gate__card .input { flex: none; text-align: center; letter-spacing: .2em; }
+select.input { height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text); font: inherit; width: 100%; }

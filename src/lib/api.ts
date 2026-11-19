@@ -113,6 +113,10 @@ export interface JobEvent {
   hecho: boolean; ok?: boolean; cancelado?: boolean; resultado?: any; mensaje?: string
 }
 
+export interface PortableStatus { portatil: boolean; llavero?: boolean; desbloqueado?: boolean; carpeta?: string }
+export interface UsbDrive { letra: string; nombre: string; extraible: boolean; libre: number; total: number }
+export interface UsbEvent { paso?: string; detalle?: string; percent?: number | null; hecho: boolean; ok?: boolean; error?: string | null; avisos?: string[]; carpeta?: string }
+
 export interface WizardProgress { paso: string; ids: string[]; respuestas: Answers }
 
 export interface CatalogBot {
@@ -227,7 +231,7 @@ export const api = {
   journalNote: (texto: string) => call<void>('journal_note', { texto }),
   usageSummary: (dias: number) => call<UsageSummary>('usage_summary', { dias }),
   firstRun: () => call<boolean>('first_run'),
-  catalog: () => call<{ bots: CatalogBot[]; nvidia: boolean }>('get_catalog'),
+  catalog: () => call<{ bots: CatalogBot[]; nvidia: boolean; portatil?: boolean; fuera?: string[] }>('get_catalog'),
   installBots: (ids: string[], answers: Answers) => call<void>('install_bots', { ids, answers }),
   installCancel: (id: string) => call<boolean>('install_cancel', { id }),
   installResume: (id: string) => call<void>('install_resume', { id }),
@@ -248,6 +252,14 @@ export const api = {
       : [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] }) as Promise<string | null>
       : Promise.resolve(kind === 'video' ? 'C:\\Videos\\referencia.mp4' : 'C:\\Imagenes\\referencia.png'),
   uiError: (texto: string) => call<void>('ui_error', { texto }),
+  portableStatus: () => call<PortableStatus>('portable_status'),
+  portableCreatePin: (pin: string) => call<void>('portable_create_pin', { pin }),
+  portableUnlock: (pin: string) => call<void>('portable_unlock', { pin }),
+  portableChangePin: (actual: string, nuevo: string) => call<void>('portable_change_pin', { actual, nuevo }),
+  usbDrives: () => call<UsbDrive[]>('usb_drives'),
+  usbCreate: (letra: string, pin: string, nombre: string) => call<void>('usb_create', { letra, pin, nombre }),
+  onUsb: (cb: (e: UsbEvent) => void): Promise<UnlistenFn> =>
+    inTauri() ? listen<UsbEvent>('lirio://usb', (e) => cb(e.payload)) : demo.on('usb', cb),
   helpPaths: () => call<{ programa: string; datos: string }>('help_paths'),
   lastSession: () => call<{ cerrado_de_golpe: boolean }>('last_session'),
   gpuStatus: (id: string) => call<GpuStatus>('gpu_status', { id }),
@@ -259,7 +271,7 @@ export const api = {
   ollamaPull: (model: string) => call<void>('ollama_pull', { model }),
   ollamaSetup: (model: string) => call<void>('ollama_setup', { model }),
   installClientSecret: (id: string, path: string) => call<string>('install_client_secret', { id, path }),
-  releaseInfo: () => call<{ version: string; repo: string | null; prueba?: boolean; datos?: string }>('release_info'),
+  releaseInfo: () => call<{ version: string; repo: string | null; prueba?: boolean; datos?: string; portatil?: boolean }>('release_info'),
   checkUpdate: () => call<{ disponible: boolean; version?: string; notas?: string; motivo?: string }>('check_update'),
   installUpdate: () => call<void>('install_update'),
   onInstall: (cb: (e: InstallEvent) => void): Promise<UnlistenFn> =>

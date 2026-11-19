@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Lirio",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "identifier": "app.lirio.launcher",
   "build": {
     "frontendDist": "../dist",
@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Lirio",
         "width": 1440,
         "height": 860,

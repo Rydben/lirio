@@ -22,6 +22,13 @@ pub fn first_run(state: State<AppState>) -> bool {
 #[tauri::command]
 pub async fn get_catalog() -> Result<Value, String> {
     let (cat, _) = tauri::async_runtime::spawn_blocking(catalog::fetch).await.map_err(|e| e.to_string())??;
+    // En la USB solo va el moderador: el editor de vídeo es demasiado pesado para un cyber
+    if crate::portable::root().is_some() {
+        let (keep, out): (Vec<_>, Vec<_>) = cat.bots.into_iter()
+            .partition(|b| crate::usb::PORTABLE_BOTS.contains(&b.id.as_str()) || b.padre.as_deref().is_some_and(|p| crate::usb::PORTABLE_BOTS.contains(&p)));
+        let fuera: Vec<String> = out.into_iter().filter(|b| b.padre.is_none()).map(|b| b.nombre).collect();
+        return Ok(json!({ "bots": keep, "nvidia": false, "portatil": true, "fuera": fuera }));
+    }
     Ok(json!({ "bots": cat.bots, "nvidia": installer::has_nvidia() }))
 }
 

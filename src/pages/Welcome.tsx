@@ -23,10 +23,12 @@ export function Welcome({ onFinish }: { onFinish: () => void }) {
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [chosen, setChosen] = useState<string[]>([])
   const [resumed, setResumed] = useState(false)
+  const [fuera, setFuera] = useState<string[]>([])
 
   useEffect(() => {
     api.catalog().then((c) => {
       setCatalog(c.bots)
+      setFuera(c.portatil ? c.fuera ?? [] : [])
       setChosen((prev) => (prev.length ? prev : c.bots.map((b) => b.id)))
     }).catch((e) => setCatalogError(String(e)))
     // ¿Lirio se cerró a medias? Se vuelve al mismo paso con las mismas respuestas.
@@ -141,6 +143,9 @@ export function Welcome({ onFinish }: { onFinish: () => void }) {
                 </label>
               ))}
             </div>
+            {fuera.length > 0 && (
+              <p className="warn small">Estás en Lirio portátil (USB): {fuera.join(', ')} no va en esta edición porque es demasiado pesado para un cyber. Se instala dentro de la USB.</p>
+            )}
             <p className="muted small">Lirio descargará Python y las librerías de cada bot (varios GB en total). Se instala solo en tu usuario.</p>
             <Nav back={back} next={next} canNext={chosen.length > 0} hint="Elige al menos un bot." />
           </section>

@@ -167,6 +167,14 @@ export const demo = {
       case 'job_cancel': return true as T
       case 'signed_approve_deletes': return ok as T
       case 'ui_error': return undefined as T
+      case 'portable_status': return { portatil: false } as T
+      case 'portable_create_pin': case 'portable_unlock': case 'portable_change_pin': return undefined as T
+      case 'usb_drives': return [{ letra: 'E:', nombre: 'KINGSTON', extraible: true, libre: 28e9, total: 32e9 }] as T
+      case 'usb_create':
+        fire('usb', [{ paso: 'velocidad', detalle: 'Midiendo la velocidad de la USB…', percent: null, hecho: false },
+          { paso: 'bot', detalle: 'Moderador de Twitch: Descargando librerías', percent: 50, hecho: false },
+          { hecho: true, ok: true, avisos: [], carpeta: 'E:\\Lirio' }])
+        return undefined as T
       case 'help_paths': return { programa: 'C:\\Users\\Ana\\AppData\\Local\\Lirio', datos: 'C:\\Users\\Ana\\AppData\\Local\\LirioDatos' } as T
       case 'last_session': return { cerrado_de_golpe: false } as T
       case 'gpu_status': return { declara: args?.id === 'twitch-autoeditor', instalado: false, nvidia: true, progreso: null } as T

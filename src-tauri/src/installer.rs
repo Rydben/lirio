@@ -319,7 +319,7 @@ pub fn install_requirements(python: &Path, dir: &Path, req: &Path, wheels: &Path
     let plan = pip_plan(python, dir, req, wheels, None);
     // --no-build-isolation: el Python embebido ignora las rutas que pip usa para construir en un entorno aparte
     // («Cannot import setuptools.build_meta»); se construye con el setuptools ya instalado en el propio bot.
-    let base_args = ["-m", "pip", "install", "--no-warn-script-location", "--disable-pip-version-check", "--no-build-isolation"];
+    let base_args = ["-m", "pip", "install", "--no-warn-script-location", "--disable-pip-version-check", "--no-build-isolation", "--no-cache-dir"];
     match plan {
         Some(items) if items.is_empty() => { say(paso, "Las librerías ya estaban".into(), Some(100)); }
         Some(items) => {
@@ -337,7 +337,7 @@ pub fn install_requirements(python: &Path, dir: &Path, req: &Path, wheels: &Path
                 say(paso, format!("Preparando {name} ({} de {})", i + 1, sdists.len()), None);
                 let before = wheel_count(wheels);
                 let mut c = Command::new(python);
-                c.current_dir(dir).args(["-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--disable-pip-version-check", "-w"])
+                c.current_dir(dir).args(["-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--disable-pip-version-check", "--no-cache-dir", "-w"])
                     .arg(wheels).arg(sd);
                 // pip a veces se cae AL CERRARSE cuando no tiene ventana; vale si dejó la rueda hecha
                 if let Err(e) = run_streaming(c, |_| {}) {
@@ -373,7 +373,7 @@ fn ensure_build_tools(python: &Path, dir: &Path) -> Result<(), String> {
     };
     if has() { return Ok(()); }
     let mut c = Command::new(python);
-    c.current_dir(dir).args(["-m", "pip", "install", "--no-warn-script-location", "--disable-pip-version-check", "setuptools", "wheel"]);
+    c.current_dir(dir).args(["-m", "pip", "install", "--no-warn-script-location", "--disable-pip-version-check", "--no-cache-dir", "setuptools", "wheel"]);
     let r = run_streaming(c, |_| {});
     if matches!(&r, Err(e) if e == CANCELLED) { return r; }
     // pip puede caerse al cerrarse sin ventana: vale si quedaron instalados
@@ -391,7 +391,7 @@ fn pip_plan(python: &Path, dir: &Path, req: &Path, wheels: &Path, find_links: Op
     let report = wheels.join("plan.json");
     let _ = std::fs::remove_file(&report);
     let mut c = Command::new(python);
-    c.current_dir(dir).args(["-m", "pip", "install", "--dry-run", "--quiet", "--disable-pip-version-check", "--no-build-isolation"]);
+    c.current_dir(dir).args(["-m", "pip", "install", "--dry-run", "--quiet", "--disable-pip-version-check", "--no-build-isolation", "--no-cache-dir"]);
     if let Some(fl) = find_links { c.arg("--no-index").arg("--find-links").arg(fl); }
     c.arg("--report").arg(&report).arg("-r").arg(req);
     let ran = run_streaming(c, |_| {});

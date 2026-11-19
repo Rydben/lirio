@@ -10,6 +10,8 @@ pub mod catalog;
 mod cli;
 pub mod fetch;
 mod ollama;
+pub mod portable;
+pub mod usb;
 mod flags;
 pub mod installer;
 mod jobs;
@@ -470,11 +472,14 @@ async fn save_settings(state: State<'_, AppState>, id: String, valores: serde_js
 /// "Arrancar mis bots al encender el PC" (solo para bots sin tarea programada propia).
 #[tauri::command]
 fn autostart_get() -> bool {
-    autostart::enabled()
+    portable::root().is_none() && autostart::enabled()
 }
 
 #[tauri::command]
 fn autostart_set(state: State<AppState>, on: bool) -> Result<bool, String> {
+    if portable::root().is_some() {
+        return Err("En la USB no se arranca con Windows: no se toca el PC del cyber.".into());
+    }
     autostart::set(on)?;
     state.journal.add("ajustes", None, if on { "Arrancar los bots al encender el PC: activado" } else { "Arrancar los bots al encender el PC: desactivado" }, true);
     Ok(autostart::enabled())
@@ -533,6 +538,14 @@ async fn check_update(app: tauri::AppHandle) -> Result<Value, String> {
     let Some(repo) = option_env!("LIRIO_REPO") else {
         return Ok(json!({"disponible": false, "motivo": "versión de desarrollo"}));
     };
+    if portable::root().is_some() {
+        // en la USB no se usa el instalador (instalaría en el PC del cyber): solo se mira la versión
+        let url = format!("https://github.com/{repo}/releases/latest/download/latest.json");
+        let v: Value = tauri::async_runtime::spawn_blocking(move || ureq::get(&url).timeout(std::time::Duration::from_secs(30)).call()
+            .map_err(|e| e.to_string())?.into_json::<Value>().map_err(|e| e.to_string())).await.map_err(|e| e.to_string())??;
+        let remote = v["version"].as_str().unwrap_or_default().to_string();
+        return Ok(json!({"disponible": newer(&remote, env!("CARGO_PKG_VERSION")), "version": remote, "notas": v["notes"]}));
+    }
     let url = format!("https://github.com/{repo}/releases/latest/download/latest.json").parse::<tauri::Url>()
         .map_err(|e| e.to_string())?;
     let updater = app.updater_builder().endpoints(vec![url]).map_err(|e| e.to_string())?
@@ -548,6 +561,14 @@ async fn check_update(app: tauri::AppHandle) -> Result<Value, String> {
 async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     use tauri_plugin_updater::UpdaterExt;
     let repo = option_env!("LIRIO_REPO").ok_or("versión de desarrollo: sin actualizaciones")?;
+    if let Some(root) = portable::root() {
+        let r = root.clone();
+        tauri::async_runtime::spawn_blocking(move || portable_update(&r, repo)).await.map_err(|e| e.to_string())??;
+        if let Some(st) = app.try_state::<AppState>() {
+            st.journal.add("actualizacion", None, "Lirio de la USB actualizado", true);
+        }
+        app.restart();
+    }
     let url = format!("https://github.com/{repo}/releases/latest/download/latest.json").parse::<tauri::Url>()
         .map_err(|e| e.to_string())?;
     let updater = app.updater_builder().endpoints(vec![url]).map_err(|e| e.to_string())?
@@ -563,7 +584,7 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
 /// Versión de Lirio y dónde se publican las versiones (para el botón "Enviar idea" y las actualizaciones).
 #[tauri::command]
 fn release_info() -> Value {
-    json!({"version": env!("CARGO_PKG_VERSION"), "repo": option_env!("LIRIO_REPO"),
+    json!({"version": env!("CARGO_PKG_VERSION"), "repo": option_env!("LIRIO_REPO"), "portatil": portable::root().is_some(),
            // Lirio abierto con carpetas de prueba: se avisa bien visible para no confundirlo con el de verdad
            "prueba": std::env::var_os("LIRIO_DATOS").is_some() || std::env::var_os("LIRIO_CONFIG").is_some(),
            "datos": data_dir().display().to_string()})
@@ -621,6 +642,97 @@ fn ui_error(state: State<AppState>, texto: String) {
     state.journal.add("error_interfaz", None, &format!("La interfaz falló: {t}"), false);
 }
 
+// ------------------------------------------------------------------ Lirio portátil (PIN)
+
+static PIN_FAILS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+#[tauri::command]
+fn portable_status(state: State<AppState>) -> Value {
+    portable::status(portable::root().as_deref(), state.approver.is_unlocked())
+}
+
+fn after_unlock(state: &AppState, s: &portable::Secrets) {
+    state.approver.unlock(&s.approver_seed);
+    // la clave de los secretos de los bots solo la reciben los procesos de los bots
+    std::env::set_var(portable::BOT_KEY_ENV, portable::hex(&s.bot_key));
+}
+
+/// Primera vez en la USB: elegir el PIN (crea el llavero con llaves nuevas).
+#[tauri::command]
+async fn portable_create_pin(state: State<'_, AppState>, pin: String) -> Result<(), String> {
+    let root = portable::root().ok_or("Esto solo existe en Lirio portátil")?;
+    let path = portable::data_dir(&root).join(portable::VAULT);
+    let s = tauri::async_runtime::spawn_blocking(move || portable::create(&path, &pin)).await.map_err(|e| e.to_string())??;
+    after_unlock(&state, &s);
+    state.journal.add("usb", None, "Llavero creado con tu PIN", true);
+    Ok(())
+}
+
+/// Desbloquear con el PIN. Cada fallo seguido espera un poco más (contra probar PINs a ciegas).
+#[tauri::command]
+async fn portable_unlock(state: State<'_, AppState>, pin: String) -> Result<(), String> {
+    let root = portable::root().ok_or("Esto solo existe en Lirio portátil")?;
+    let path = portable::data_dir(&root).join(portable::VAULT);
+    let fails = PIN_FAILS.load(std::sync::atomic::Ordering::Relaxed);
+    let wait = std::time::Duration::from_secs(u64::from(fails.min(10)) * 2);
+    let r = tauri::async_runtime::spawn_blocking(move || { std::thread::sleep(wait); portable::open(&path, &pin) })
+        .await.map_err(|e| e.to_string())?;
+    match r {
+        Ok(s) => { PIN_FAILS.store(0, std::sync::atomic::Ordering::Relaxed); after_unlock(&state, &s); Ok(()) }
+        Err(e) => { PIN_FAILS.fetch_add(1, std::sync::atomic::Ordering::Relaxed); Err(e) }
+    }
+}
+
+#[tauri::command]
+async fn portable_change_pin(state: State<'_, AppState>, actual: String, nuevo: String) -> Result<(), String> {
+    let root = portable::root().ok_or("Esto solo existe en Lirio portátil")?;
+    let path = portable::data_dir(&root).join(portable::VAULT);
+    tauri::async_runtime::spawn_blocking(move || portable::change_pin(&path, &actual, &nuevo)).await.map_err(|e| e.to_string())??;
+    state.journal.add("usb", None, "PIN cambiado", true);
+    Ok(())
+}
+
+/// Versión nueva de Lirio portátil: se descarga el zip portátil de la versión, se comprueba la firma del publicador
+/// y se cambia el exe DENTRO de la USB (el que está abierto se renombra: Windows lo permite). Al reabrir, ya es la nueva.
+fn portable_update(root: &std::path::Path, repo: &str) -> Result<String, String> {
+    let base = format!("https://github.com/{repo}/releases/latest/download");
+    let get = |name: &str, max: u64| -> Result<Vec<u8>, String> {
+        let r = ureq::get(&format!("{base}/{name}")).timeout(std::time::Duration::from_secs(600)).call()
+            .map_err(|e| format!("{name}: {e}"))?;
+        let mut b = Vec::new();
+        std::io::Read::read_to_end(&mut std::io::Read::take(r.into_reader(), max), &mut b).map_err(|e| e.to_string())?;
+        Ok(b)
+    };
+    let zip = get(PORTABLE_ZIP, 200 * 1024 * 1024)?;
+    let sig = String::from_utf8(get(&format!("{PORTABLE_ZIP}.sig"), 4096)?).map_err(|e| e.to_string())?;
+    catalog::verify_signature(&zip, &sig, catalog::PUBLISHER_KEY)?;
+    let stage = portable::data_dir(root).join("actualizacion");
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::create_dir_all(&stage).map_err(|e| e.to_string())?;
+    let zpath = stage.join(PORTABLE_ZIP);
+    std::fs::write(&zpath, &zip).map_err(|e| e.to_string())?;
+    installer::extract_zip(&zpath, &stage)?;
+    let new_exe = stage.join("Lirio.exe");
+    if !new_exe.exists() { return Err("el zip portátil no trae Lirio.exe".into()); }
+    let cur = std::env::current_exe().map_err(|e| e.to_string())?;
+    let old = root.join("Lirio.old.exe");
+    let _ = std::fs::remove_file(&old);
+    std::fs::rename(&cur, &old).map_err(|e| format!("no se pudo apartar el Lirio abierto: {e}"))?;
+    if let Err(e) = std::fs::copy(&new_exe, root.join("Lirio.exe")) {
+        let _ = std::fs::rename(&old, &cur); // si falla, se deja todo como estaba
+        return Err(format!("no se pudo copiar el Lirio nuevo: {e}"));
+    }
+    let _ = std::fs::remove_dir_all(&stage);
+    Ok(root.join("Lirio.exe").display().to_string())
+}
+
+pub const PORTABLE_ZIP: &str = "Lirio_portatil_x64.zip";
+
+fn newer(remote: &str, local: &str) -> bool {
+    let parse = |v: &str| v.trim_start_matches('v').split('.').map(|x| x.parse::<u32>().unwrap_or(0)).collect::<Vec<_>>();
+    parse(remote) > parse(local)
+}
+
 /// Carpetas de Lirio en este PC (para añadirlas como excepción en el antivirus).
 #[tauri::command]
 fn help_paths(state: State<AppState>) -> Value {
@@ -654,6 +766,10 @@ fn approver_key(state: State<AppState>) -> approver::PublicKeyInfo {
 /// Carpeta de datos de Lirio: llave de aprobaciones, bots instalados y descargas.
 /// NO es `%LOCALAPPDATA%\Lirio`, porque ahí instala el instalador de Windows y desinstalar la vaciaría.
 pub fn data_dir() -> PathBuf {
+    // Lirio portátil: todo dentro de la USB
+    if let Some(root) = portable::root() {
+        return portable::data_dir(&root);
+    }
     // LIRIO_DATOS: otra carpeta de datos (pruebas que simulan el PC nuevo de un amigo)
     if let Some(d) = std::env::var_os("LIRIO_DATOS") {
         return PathBuf::from(d);
@@ -683,15 +799,28 @@ pub fn migrate_data(old: &std::path::Path, new: &std::path::Path) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let portable_root = portable::root();
+    if let Some(root) = &portable_root {
+        // antes que nada: cachés, TEMP y WebView2 dentro de la USB
+        if let Err(msg) = portable::prepare(root) {
+            portable::native_alert(&msg);
+            return;
+        }
+    }
     let data = data_dir();
     // LIRIO_CONFIG permite apuntar a otra configuración (pruebas con bots de mentira)
-    let config_path = std::env::var_os("LIRIO_CONFIG").map(PathBuf::from).unwrap_or_else(|| {
-        dirs::config_dir().unwrap_or_else(|| data.clone()).join("Lirio").join("config.json")
-    });
-    let approver = Approver::load_or_create(&data).expect("no se pudo preparar la llave de aprobaciones de Lirio");
+    let config_path = if portable_root.is_some() { data.join("config.json") } else {
+        std::env::var_os("LIRIO_CONFIG").map(PathBuf::from).unwrap_or_else(|| {
+            dirs::config_dir().unwrap_or_else(|| data.clone()).join("Lirio").join("config.json")
+        })
+    };
+    // En la USB la llave está en el llavero con PIN: Lirio arranca bloqueado hasta que se escribe
+    let approver = if portable_root.is_some() { Approver::locked() } else {
+        Approver::load_or_create(&data).expect("no se pudo preparar la llave de aprobaciones de Lirio")
+    };
     if std::env::args().any(|a| a == autostart::FLAG) {
         // Inicio de Windows: arranca el vigilante de cada bot que lo tenga (y no esté en STOP) y termina, sin ventana.
-        let cfg = LirioConfig::load_with(&config_path, std::env::var_os("LIRIO_CONFIG").is_none());
+        let cfg = LirioConfig::load_with(&config_path, std::env::var_os("LIRIO_CONFIG").is_none() && portable_root.is_none());
         let journal = journal::Journal::new(&data);
         for m in modules::discover(&cfg).0.iter().filter(|m| !m.is_sub_bot() && m.task.is_none() && m.has_command("watch")) {
             let running = matches!(m.view()["state"].as_str(), Some("watching" | "running"));
@@ -722,7 +851,14 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup({
             let mark = data.join(SESSION_MARK);
-            move |_| {
+            let webview_dir = portable_root.as_ref().map(|r| portable::data_dir(r).join("webview"));
+            move |app| {
+                // la ventana se crea aquí para poder llevar la caché de WebView2 a la USB en modo portátil
+                if let Some(conf) = app.config().app.windows.first().cloned() {
+                    let mut b = tauri::WebviewWindowBuilder::from_config(app.handle(), &conf)?;
+                    if let Some(d) = &webview_dir { b = b.data_directory(d.clone()); }
+                    b.build()?;
+                }
                 // aquí ya sabemos que somos la única ventana de Lirio (single-instance va antes)
                 UNEXPECTED_CLOSE.store(closed_unexpectedly(&mark, winutil::boot_time()), std::sync::atomic::Ordering::Relaxed);
                 let _ = std::fs::write(&mark, chrono::Utc::now().to_rfc3339());
@@ -730,7 +866,8 @@ pub fn run() {
             }
         })
         .manage(AppState { config_path, journal: journal::Journal::new(&data), data_dir: data, approver, uploads: Mutex::new(HashSet::new()),
-                           use_defaults: std::env::var_os("LIRIO_CONFIG").is_none() })
+                           // en la USB, nunca los bots del creador (sus rutas y su usuario no deben ir en la USB de un amigo)
+                           use_defaults: std::env::var_os("LIRIO_CONFIG").is_none() && portable_root.is_none() })
         .invoke_handler(tauri::generate_handler![
             overview, module_details, activity, run_command, start_upload, gesture_begin,
             signed_decision, kill_switch_on, kill_switch_off, start_bot, approver_key, start_page,
@@ -739,7 +876,8 @@ pub fn run() {
             wizard::ollama_pull, wizard::ollama_setup, wizard::install_client_secret, wizard::gpu_status, wizard::install_gpu, release_info, check_update, install_update,
             journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions,
             help_paths, last_session, open_bot_folder, thumbnails, signed_approve_deletes,
-            jobs::job_start, jobs::jobs_status, jobs::job_cancel, ui_error
+            jobs::job_start, jobs::jobs_status, jobs::job_cancel, ui_error,
+            portable_status, portable_create_pin, portable_unlock, portable_change_pin, usb::usb_drives, usb::usb_create
         ])
         .build(tauri::generate_context!())
         .expect("error al arrancar Lirio")

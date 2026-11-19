@@ -29,7 +29,12 @@ impl LirioConfig {
     /// `use_defaults=false`: nunca rellena con los bots del creador (configuraciones de prueba con LIRIO_CONFIG).
     pub fn load_with(path: &Path, use_defaults: bool) -> Self {
         if let Ok(txt) = std::fs::read_to_string(path) {
-            if let Ok(cfg) = serde_json::from_str::<LirioConfig>(&txt) {
+            if let Ok(mut cfg) = serde_json::from_str::<LirioConfig>(&txt) {
+                // rutas relativas = relativas a la carpeta de la configuración (Lirio portátil)
+                let base = path.parent().unwrap_or(Path::new("."));
+                for m in &mut cfg.modulos {
+                    if m.ruta.is_relative() { m.ruta = base.join(&m.ruta); }
+                }
                 return cfg;
             }
         }
@@ -60,7 +65,15 @@ impl LirioConfig {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        std::fs::write(path, serde_json::to_vec_pretty(self).unwrap()).map_err(|e| e.to_string())
+        // los bots que están dentro de la carpeta de la configuración se guardan con ruta relativa
+        // (en la USB la letra de unidad cambia en cada PC)
+        let base = path.parent().unwrap_or(Path::new("."));
+        let mut out = LirioConfig { usuario: self.usuario.clone(), modulos: Vec::new() };
+        for m in &self.modulos {
+            let ruta = m.ruta.strip_prefix(base).map(Path::to_path_buf).unwrap_or_else(|_| m.ruta.clone());
+            out.modulos.push(ModuleEntry { ruta, tarea: m.tarea.clone() });
+        }
+        std::fs::write(path, serde_json::to_vec_pretty(&out).unwrap()).map_err(|e| e.to_string())
     }
 }
 
@@ -424,6 +437,19 @@ mod tests {
         assert_eq!(m.cwd(), d.path());
         assert_eq!(m.view()["state"], "on_demand");
         assert_eq!(m.view()["approvals_pending"], json!([]), "sin duplicados en el bot de miniaturas");
+    }
+
+    #[test]
+    fn config_inside_the_usb_uses_relative_paths() {
+        let d = tempfile::tempdir().unwrap();
+        let cfg_path = d.path().join("LirioDatos").join("config.json");
+        let bot = d.path().join("LirioDatos").join("bots").join("twitch-moderator");
+        let cfg = LirioConfig { usuario: None, modulos: vec![ModuleEntry { ruta: bot.clone(), tarea: None }] };
+        cfg.save(&cfg_path).unwrap();
+        let raw = std::fs::read_to_string(&cfg_path).unwrap();
+        assert!(!raw.contains(&d.path().display().to_string().replace('\\', "\\\\")), "sin la letra de unidad: {raw}");
+        assert!(raw.contains("twitch-moderator"));
+        assert_eq!(LirioConfig::load_with(&cfg_path, false).modulos[0].ruta, bot);
     }
 
     #[test]

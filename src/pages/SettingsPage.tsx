@@ -1,6 +1,7 @@
 // Configuración: actualizaciones, enviar una idea, YouTube, la llave de aprobaciones y el avatar.
 import { useEffect, useState } from 'react'
 import { AntivirusHelp } from '../components/AntivirusHelp'
+import { UsbSection } from '../components/UsbSection'
 import { Avatar } from '../components/Avatar'
 import { EXPRESSIONS } from '../components/Face'
 import { YouTubeGuide } from '../components/YouTubeGuide'
@@ -16,6 +17,8 @@ const LABELS: Record<Expression, string> = {
 
 export function SettingsPage() {
   const [key, setKey] = useState<{ id: string; llave_publica: string } | null>(null)
+  const [portable, setPortable] = useState(false)
+  useEffect(() => { api.releaseInfo().then((r) => setPortable(!!r.portatil)).catch(() => {}) }, [])
   const [paths, setPaths] = useState<{ programa: string; datos: string } | null>(null)
   useEffect(() => { api.helpPaths().then(setPaths).catch(() => {}) }, [])
   const [expr, setExpr] = useState<Expression>('feliz')
@@ -31,7 +34,8 @@ export function SettingsPage() {
         <Updates />
         <SendIdea />
       </div>
-      <AutoStart />
+      {!portable && <AutoStart />}
+      <UsbSection portable={portable} />
       <AntivirusHelp open={window.location.hash.includes('antivirus')} />
       <YouTubeSection />
       <div className="grid-2">

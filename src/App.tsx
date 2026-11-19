@@ -5,6 +5,7 @@ import { ApprovalCard } from './components/Approvals'
 import { LirioLogo } from './components/LirioLogo'
 import { ScreenFace } from './components/Face'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { PinGate } from './components/PinGate'
 import { Icon, ToastProvider, useToast } from './components/ui'
 import { api, inTauri, type UploadEvent } from './lib/api'
 import { moodFor } from './lib/mood'
@@ -59,7 +60,13 @@ function samePage(a: Page, b: Page) {
 
 function Shell() {
   const [welcome, setWelcome] = useState<boolean | null>(null)
-  useEffect(() => { api.firstRun().then(setWelcome).catch(() => setWelcome(false)) }, [])
+  // Lirio portátil: primero el PIN (sin él no hay llave de aprobaciones ni secretos de los bots)
+  const [pin, setPin] = useState<'cargando' | 'crear' | 'pedir' | 'ok'>('cargando')
+  useEffect(() => {
+    api.portableStatus().then((s) => setPin(!s.portatil || s.desbloqueado ? 'ok' : s.llavero ? 'pedir' : 'crear')).catch(() => setPin('ok'))
+  }, [])
+  useEffect(() => { if (pin === 'ok') api.firstRun().then(setWelcome).catch(() => setWelcome(false)) }, [pin])
+  if (pin === 'crear' || pin === 'pedir') return <><PinGate exists={pin === 'pedir'} onUnlocked={() => setPin('ok')} /><div className="welcome__winbtns"><WindowButtons /></div></>
   if (welcome === null) return <div className="app app--loading" />
   if (welcome) return <><Welcome onFinish={() => setWelcome(false)} /><div className="welcome__winbtns"><WindowButtons /></div></>
   return <Main />

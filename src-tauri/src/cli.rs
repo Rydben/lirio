@@ -132,7 +132,9 @@ pub fn spawn_watch(m: &Module) -> Result<(), String> {
     {
         use std::os::windows::process::CommandExt;
         const DETACHED_PROCESS: u32 = 0x0000_0008;
-        cmd.creation_flags(winutil::CREATE_NO_WINDOW | DETACHED_PROCESS);
+        const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+        let low = if std::env::var_os("LIRIO_PORTATIL").is_some() { BELOW_NORMAL_PRIORITY_CLASS } else { 0 };
+        cmd.creation_flags(winutil::CREATE_NO_WINDOW | DETACHED_PROCESS | low);
     }
     cmd.spawn().map(|_| ()).map_err(|e| format!("no se pudo arrancar el bot: {e}"))
 }

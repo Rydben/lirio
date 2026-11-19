@@ -13,7 +13,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 
 use crate::winutil;
@@ -55,10 +55,12 @@ pub struct PublicKeyInfo {
 }
 
 pub struct Approver {
-    key: SigningKey,
-    pub key_id: String,
+    /// None = bloqueado (Lirio portátil hasta que se escribe el PIN)
+    key: RwLock<Option<SigningKey>>,
     gestures: Mutex<HashMap<String, Instant>>,
 }
+
+pub const LOCKED: &str = "Lirio está bloqueado: escribe tu PIN para aprobar.";
 
 impl Approver {
     /// Carga la llave o la crea la primera vez.
@@ -82,16 +84,33 @@ impl Approver {
     }
 
     pub fn from_key(key: SigningKey) -> Self {
-        let key_id = key_id(&key.verifying_key());
-        Self { key, key_id, gestures: Mutex::new(HashMap::new()) }
+        Self { key: RwLock::new(Some(key)), gestures: Mutex::new(HashMap::new()) }
+    }
+
+    /// Sin llave hasta `unlock` (Lirio portátil: la llave está en el llavero con PIN).
+    pub fn locked() -> Self {
+        Self { key: RwLock::new(None), gestures: Mutex::new(HashMap::new()) }
+    }
+
+    pub fn unlock(&self, seed: &[u8; 32]) {
+        *self.key.write().unwrap() = Some(SigningKey::from_bytes(seed));
+    }
+
+    pub fn is_unlocked(&self) -> bool {
+        self.key.read().unwrap().is_some()
     }
 
     pub fn public_info(&self) -> PublicKeyInfo {
-        PublicKeyInfo {
-            alg: "ed25519",
-            llave_publica: B64.encode(self.key.verifying_key().as_bytes()),
-            id: self.key_id.clone(),
+        match self.key.read().unwrap().as_ref() {
+            Some(k) => PublicKeyInfo { alg: "ed25519", llave_publica: B64.encode(k.verifying_key().as_bytes()),
+                                       id: key_id(&k.verifying_key()) },
+            None => PublicKeyInfo { alg: "ed25519", llave_publica: String::new(), id: "bloqueada".into() },
         }
+    }
+
+    /// Llave pública de una semilla (para fijarla en los bots al crear la USB, sin cargarla en este Lirio).
+    pub fn public_info_of(seed: &[u8; 32]) -> PublicKeyInfo {
+        Self::from_key(SigningKey::from_bytes(seed)).public_info()
     }
 
     /// Empieza el gesto (al pulsar el botón). Devuelve un token de un solo uso.
@@ -128,12 +147,14 @@ impl Approver {
             caduca: (now + Duration::minutes(VALIDITY_MIN)).to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
             nonce: random_hex(16),
         };
+        let guard = self.key.read().unwrap();
+        let key = guard.as_ref().ok_or(LOCKED)?;
         let text = serde_json::to_string(&p).map_err(|e| e.to_string())?;
-        let sig = self.key.sign(text.as_bytes());
+        let sig = key.sign(text.as_bytes());
         Ok(SignedApproval {
             formato: FORMAT.into(),
             aprobador: APPROVER.into(),
-            llave_id: self.key_id.clone(),
+            llave_id: key_id(&key.verifying_key()),
             payload: text,
             firma: B64.encode(sig.to_bytes()),
         })
@@ -180,12 +201,23 @@ mod tests {
     }
 
     #[test]
+    fn locked_approver_never_signs() {
+        let a = Approver::locked();
+        assert!(!a.is_unlocked());
+        assert_eq!(a.public_info().id, "bloqueada");
+        assert_eq!(a.sign("m", "approve", "x", None, None, Utc::now()).unwrap_err(), LOCKED);
+        a.unlock(&[7u8; 32]);
+        assert!(a.sign("m", "approve", "x", None, None, Utc::now()).is_ok());
+        assert_eq!(a.public_info().llave_publica, Approver::public_info_of(&[7u8; 32]).llave_publica);
+    }
+
+    #[test]
     fn signature_verifies_over_exact_payload_text() {
         let a = approver();
         let now = Utc::now();
         let s = a.sign("twitch-autoeditor", "approve", "abc123", Some("youtube.publish_public".into()),
                        Some("C:\\out\\ñ.mp4".into()), now).unwrap();
-        let vk = a.key.verifying_key();
+        let vk = a.key.read().unwrap().as_ref().unwrap().verifying_key();
         let sig = Signature::from_slice(&B64.decode(&s.firma).unwrap()).unwrap();
         assert!(vk.verify(s.payload.as_bytes(), &sig).is_ok());
         let p: Payload = serde_json::from_str(&s.payload).unwrap();

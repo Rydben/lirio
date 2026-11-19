@@ -16,6 +16,7 @@ Las llaves nunca salen de tu PC: están cifradas con DPAPI en %USERPROFILE%\\.li
 from __future__ import annotations
 
 import argparse
+import zipfile
 import datetime as dt
 import json
 import os
@@ -38,6 +39,26 @@ def run(cmd: list, env: dict | None = None, capture: bool = False) -> str:
     if res.returncode != 0:
         raise SystemExit(f"PARADO: falló {cmd[0]} ({res.returncode})\n{(res.stderr or '')[-1500:]}")
     return res.stdout if capture else ""
+
+
+PORTABLE_TXT = (
+    "Esta carpeta es Lirio PORTÁTIL.\r\n"
+    "Todo lo de Lirio (configuración, bots, llaves) se guarda aquí dentro, en LirioDatos.\r\n"
+    "No borres este archivo: es lo que le dice a Lirio que no escriba nada en el PC.\r\n"
+)
+LEEME_PORTATIL = (
+    "LIRIO PORTÁTIL (para jugar en cybers)\r\n"
+    "\r\n"
+    "1. Descomprime esta carpeta en tu USB (mejor USB 3.0) y abre Lirio.exe: sin instalar nada ni ser administrador.\r\n"
+    "2. La primera vez elige un PIN. Sin el PIN, la USB no sirve de nada si la pierdes.\r\n"
+    "3. Lirio instalará el moderador de Twitch DENTRO de la USB (hacen falta unos 4 GB libres).\r\n"
+    "4. Al terminar, cierra Lirio y quita la USB: no queda nada tuyo en el PC.\r\n"
+    "\r\n"
+    "OJO: muchos cybers bloquean los programas que se abren desde una USB o borran todo al reiniciar.\r\n"
+    "Pregunta antes en tu cyber si se puede.\r\n"
+    "\r\n"
+    "El editor de vídeo NO va en esta edición: es demasiado pesado para un cyber.\r\n"
+)
 
 
 def version() -> str:
@@ -90,6 +111,16 @@ def main(argv: list[str] | None = None) -> int:
     installer_name = f"Lirio_{ver}_x64-setup.exe"
     shutil.copy2(setup, out / installer_name)
     shutil.copy2(sig, out / (installer_name + ".sig"))
+
+    # 3b. Lirio PORTÁTIL (USB): el mismo exe + portable.txt + LÉEME, firmado con la llave del publicador
+    #     (es lo que comprueba la USB al actualizarse; los bots los instala Lirio dentro de la USB)
+    portable_zip = out / "Lirio_portatil_x64.zip"
+    exe = TAURI / "target" / "release" / "lirio.exe"
+    with zipfile.ZipFile(portable_zip, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(exe, "Lirio.exe")
+        z.writestr("portable.txt", PORTABLE_TXT)
+        z.writestr("LEEME.txt", LEEME_PORTATIL)
+    run([PUBLICAR, "firmar", portable_zip])
 
     # 4. latest.json para el actualizador
     latest = {

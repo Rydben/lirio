@@ -30,6 +30,15 @@ pub struct Catalog {
     pub bots: Vec<CatalogEntry>,
 }
 
+/// Firma Ed25519 del publicador sobre unos bytes cualesquiera (p. ej. el zip de Lirio portátil).
+pub fn verify_signature(bytes: &[u8], sig_b64: &str, publisher_b64: &str) -> Result<(), String> {
+    let pk: [u8; 32] = B64.decode(publisher_b64.trim()).map_err(|_| "llave del publicador mal formada")?
+        .try_into().map_err(|_| "llave del publicador mal formada")?;
+    let vk = VerifyingKey::from_bytes(&pk).map_err(|_| "llave del publicador no válida")?;
+    let sig = B64.decode(sig_b64.trim()).ok().and_then(|b| Signature::from_slice(&b).ok()).ok_or("firma mal formada")?;
+    vk.verify(bytes, &sig).map_err(|_| "la firma no es válida: no se usa".to_string())
+}
+
 pub fn verify(catalog_bytes: &[u8], sig_b64: &str, publisher_b64: &str) -> Result<Catalog, String> {
     let pk: [u8; 32] = B64.decode(publisher_b64.trim()).map_err(|_| "llave del publicador mal formada")?
         .try_into().map_err(|_| "llave del publicador mal formada")?;
