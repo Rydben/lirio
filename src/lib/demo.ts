@@ -101,6 +101,11 @@ export const demo = {
         if (c === 'ajustes') return { ...ok, data: { valores: { 'canal.nombre': 'Alex', 'edicion.zoom': true, 'edicion.shorts': 3 } } } as T
         if (c === 'probar-voz') return { ...ok, data: { oido: 'lirio pon el modo lento', palabra_activacion: true, es_tu_voz: true,
           similitud: 0.82, comando: 'modo_lento', descripcion: 'Activar el modo lento del chat (30 s)', ejecutado: false } } as T
+        if (c === 'monetizacion' && args?.id === 'twitch-moderator') return { ...ok, data: { ok: true, canal: { login: 'alex' }, tipo_cuenta: '',
+          seguidores: 18, ultimos_30_dias: { dias_emitidos: 5, minutos_emitidos: 610, media_espectadores: 2.4, directos: 6 },
+          en_directo: { activo: false }, motivos: {}, avisos: [] } } as T
+        if (c === 'monetizacion') return { ...ok, data: { ok: true, suscriptores: 212, videos_publicos_90d: 7, horas_publicas_12m: 640,
+          vistas_shorts_90d: null, visualizaciones_totales: 15840, motivos: { vistas_shorts_90d: 'YouTube Analytics no separa las vistas de Shorts para este canal.' }, avisos: [] } } as T
         if (c === 'carpetas') return { ...ok, data: { editados: 'C:\\v\\output', directos: 'C:\\v\\downloads', miniaturas: 'C:\\v\\output', nota: 'x' } } as T
         if (c === 'papelera') return { ...ok, data: {
           carpetas: { editados: 'C:\\v\\output', directos: 'C:\\v\\downloads', miniaturas: 'C:\\v\\output' },
@@ -170,6 +175,7 @@ export const demo = {
         return clave as T
       }
       case 'jobs_status': return {} as T
+      case 'monetizacion_datos': return null as T
       case 'youtube_status': return { estado: 'ok', project_id: 'lirio-demo-1', autorizado_en: new Date().toISOString(), dias_restantes: 7, client_secret: true, token: true } as T
       case 'youtube_check_file': return { tipo: 'installed', project_id: 'lirio-demo-1' } as T
       case 'job_cancel': return true as T

@@ -1,0 +1,124 @@
+{
+  "formato": "lirio-monetizacion/1",
+  "comprobado": "2026-11-19",
+  "nota": "Requisitos copiados de las páginas oficiales en la fecha de «comprobado». Se actualizan publicando este archivo (firmado) sin cambiar Lirio. Lirio solo guía: nunca acepta contratos ni rellena datos fiscales o bancarios.",
+  "plataformas": {
+    "twitch": {
+      "nombre": "Twitch",
+      "programas": [
+        {
+          "id": "afiliado",
+          "nombre": "Afiliado",
+          "resumen": "Desbloquea suscripciones, Bits y anuncios.",
+          "fuente": "https://help.twitch.tv/s/article/joining-the-affiliate-program?language=es",
+          "requisitos": [
+            { "id": "seguidores", "texto": "Seguidores", "meta": 25, "dato": "seguidores" },
+            { "id": "minutos", "texto": "Tiempo emitido (últimos 30 días)", "meta": 240, "unidad": "min", "dato": "ultimos_30_dias.minutos_emitidos" },
+            { "id": "dias", "texto": "Días distintos con directo (últimos 30 días)", "meta": 4, "dato": "ultimos_30_dias.dias_emitidos" },
+            { "id": "media", "texto": "Media de espectadores (en 4 días de los últimos 30)", "meta": 3, "dato": "ultimos_30_dias.media_espectadores" }
+          ],
+          "notas": [
+            "Los días con menos de 3 espectadores de media no cuentan en tu contra.",
+            "Hace falta tener activada la verificación en dos pasos.",
+            "La invitación llega por correo y al panel de control entre 24 y 48 horas después de cumplirlo todo.",
+            "Si tienes entre 13 y 17 años, tu madre, padre o tutor debe aceptar el acuerdo contigo."
+          ]
+        },
+        {
+          "id": "socio",
+          "nombre": "Socio (Partner)",
+          "resumen": "Hay que solicitarlo; Twitch lo revisa y cumplir los requisitos no lo garantiza.",
+          "fuente": "https://help.twitch.tv/s/article/achievements?language=es",
+          "requisitos": [
+            { "id": "dias", "texto": "Días distintos con directo (últimos 30 días)", "meta": 6, "dato": "ultimos_30_dias.dias_emitidos" },
+            { "id": "media", "texto": "Media de espectadores por directo", "meta": 75, "dato": "ultimos_30_dias.media_espectadores" }
+          ],
+          "notas": [
+            "Son 6 directos en 6 días distintos con 75 espectadores de media cada uno, en los últimos 30 días y también en los 30 anteriores.",
+            "Los directos con menos de 75 de media no cuentan para este logro.",
+            "Twitch también tiene en cuenta el historial de suspensiones."
+          ]
+        }
+      ],
+      "pago": {
+        "umbral": "50 $ con la mayoría de métodos (PayPal, ingreso directo, cheque electrónico/banco local, cheque) o 100 $ por transferencia bancaria.",
+        "cuando": "Net15: el pago se inicia 15 días después de acabar el mes en el que ganaste, y llega entre 1 y 5 días más tarde.",
+        "fuente": "https://help.twitch.tv/s/article/joining-the-affiliate-program?language=es"
+      },
+      "pasos": [
+        { "texto": "Activa la verificación en dos pasos en tu cuenta de Twitch.", "url": "https://www.twitch.tv/settings/security" },
+        { "texto": "Mira tu progreso en Logros del panel de control: ahí aparece el botón para unirte cuando cumples los requisitos.", "url": "https://dashboard.twitch.tv/achievements" },
+        { "texto": "Acepta el Acuerdo de streamer monetizado (lo haces tú en la web de Twitch; Lirio nunca lo acepta por ti)." },
+        { "texto": "Rellena los cuestionarios fiscales con tus datos legales reales (en la web de Twitch, nunca en Lirio)." },
+        { "texto": "Elige el método de pago (en la web de Twitch). Para cambiarlo después: Panel de control → Monetización → Afiliado." },
+        { "texto": "Haz los cambios de pago antes del día 8–10 del mes para que no se retrase el pago de ese mes." }
+      ],
+      "ganar": [
+        { "nombre": "Suscripciones", "texto": "Reparto estándar para afiliados: 50 % para ti (después de impuestos y tasas del pago)." },
+        { "nombre": "Bits", "texto": "Tus espectadores te animan con Bits en el chat." },
+        { "nombre": "Anuncios", "texto": "Ingresos por publicidad durante tus directos." }
+      ]
+    },
+    "youtube": {
+      "nombre": "YouTube",
+      "programas": [
+        {
+          "id": "inicial",
+          "nombre": "Nivel inicial: membresías del canal",
+          "resumen": "Membresías del canal. Super Chat, Super Stickers y Super Thanks piden además ser mayor de 18 años, estar en un país compatible y aceptar el módulo de productos de comercio.",
+          "fuente": "https://support.google.com/youtube/answer/72857?hl=es",
+          "requisitos": [
+            { "id": "suscriptores", "texto": "Suscriptores", "meta": 500, "dato": "suscriptores" },
+            { "id": "videos", "texto": "Vídeos públicos subidos (últimos 90 días)", "meta": 3, "dato": "videos_publicos_90d" },
+            { "una_de": [
+              { "id": "horas", "texto": "Horas de visualización públicas de vídeos largos (últimos 365 días)", "meta": 3000, "unidad": "h", "dato": "horas_publicas_12m" },
+              { "id": "shorts", "texto": "Visualizaciones de Shorts (últimos 90 días)", "meta": 3000000, "dato": "vistas_shorts_90d" }
+            ] }
+          ],
+          "notas": ["Mayor de 18 años y vivir en un país donde esté disponible."]
+        },
+        {
+          "id": "anuncios",
+          "nombre": "Programa de Partners de YouTube: anuncios",
+          "resumen": "Ingresos por anuncios en vídeos largos y en el feed de Shorts.",
+          "fuente": "https://support.google.com/youtube/answer/72851?hl=es",
+          "requisitos": [
+            { "id": "suscriptores", "texto": "Suscriptores", "meta": 1000, "dato": "suscriptores" },
+            { "una_de": [
+              { "id": "horas", "texto": "Horas de visualización públicas de vídeos largos (últimos 12 meses)", "meta": 4000, "unidad": "h", "dato": "horas_publicas_12m" },
+              { "id": "shorts", "texto": "Visualizaciones de Shorts (últimos 90 días)", "meta": 10000000, "dato": "vistas_shorts_90d" }
+            ] }
+          ],
+          "notas": [
+            "Solo cuentan las horas de vídeos largos públicos; las del feed de Shorts no suman a las 4000.",
+            "Sin avisos activos de las Normas de la comunidad, con la verificación en dos pasos y con una cuenta de AdSense para YouTube vinculada.",
+            "La revisión suele tardar alrededor de un mes. Si te rechazan, puedes volver a solicitarlo a los 30 días (90 las siguientes veces).",
+            "Si pasas 6 meses o más sin subir nada ni publicar, pueden quitarte la monetización."
+          ]
+        }
+      ],
+      "pago": {
+        "umbral": "100 $ (o su equivalente en tu moneda) en AdSense para YouTube. Con 10 $ te mandan por correo un PIN para verificar tu dirección.",
+        "cuando": "Cada mes: el saldo tiene que llegar al umbral el día 20 y el pago se envía entre el 21 y el 26.",
+        "fuente": "https://support.google.com/adsense/answer/1709871?hl=es"
+      },
+      "pasos": [
+        { "texto": "Activa la verificación en dos pasos en tu cuenta de Google.", "url": "https://myaccount.google.com/signinoptions/two-step-verification" },
+        { "texto": "En YouTube Studio, ve a «Ganar dinero» y pulsa «Solicitar» cuando cumplas los requisitos.", "url": "https://studio.youtube.com/" },
+        { "texto": "Revisa y acepta los términos básicos tú mismo en YouTube Studio (Lirio nunca los acepta por ti).", "url": "https://support.google.com/youtube/answer/72851?hl=es" },
+        { "texto": "Crea o vincula tu cuenta de AdSense para YouTube desde YouTube Studio. Solo una por titular.", "url": "https://support.google.com/youtube/answer/72866?hl=es" },
+        { "texto": "Verifica tu dirección con el PIN que llega por correo al alcanzar 10 $. Si no lo haces en 4 meses, se pausa la monetización." },
+        { "texto": "Envía tus datos fiscales de EE. UU. en AdSense para YouTube (vale para todos los creadores, vivan donde vivan) antes del 10 de diciembre de cada año. Si no, pueden retener hasta el 24 % de tus ganancias.", "url": "https://support.google.com/youtube/answer/10391362?hl=es" },
+        { "texto": "Elige el método de pago en AdSense para YouTube (lo haces tú; Lirio nunca rellena datos bancarios)." }
+      ],
+      "ganar": [
+        { "nombre": "Anuncios", "texto": "En vídeos largos y en el feed de Shorts.", "url": "https://support.google.com/youtube/answer/94522?hl=es" },
+        { "nombre": "Membresías del canal", "texto": "Cuotas mensuales a cambio de ventajas.", "url": "https://support.google.com/youtube/answer/7636690?hl=es" },
+        { "nombre": "Super Chat y Super Stickers", "texto": "Mensajes destacados pagados en tus directos.", "url": "https://support.google.com/youtube/answer/9277801?hl=es" },
+        { "nombre": "Super Thanks", "texto": "Agradecimientos pagados en tus vídeos.", "url": "https://support.google.com/youtube/answer/10879035?hl=es" },
+        { "nombre": "YouTube Premium", "texto": "Parte de lo que pagan los miembros de Premium que ven tus vídeos.", "url": "https://support.google.com/youtube/answer/6306276?hl=es" }
+      ],
+      "aviso_fecha": "YouTube ha anunciado cambios en el programa para el 1 de febrero de 2027: hay que aceptar los nuevos términos en YouTube Studio antes del 31 de enero de 2027."
+    }
+  }
+}

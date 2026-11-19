@@ -58,7 +58,7 @@ pub fn verify(catalog_bytes: &[u8], sig_b64: &str, publisher_b64: &str) -> Resul
     Ok(cat)
 }
 
-fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
+pub fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
     if let Some(path) = url.strip_prefix("file://") {
         return std::fs::read(path).map_err(|e| format!("{path}: {e}"));
     }

@@ -119,6 +119,9 @@ def main(argv: list[str] | None = None) -> int:
     # 1-2. Bots y catálogo firmado
     run([sys.executable, ROOT / "scripts" / "empaquetar.py", *args.bots, "--salida", out])
     run([PUBLICAR, "firmar", out / "catalogo.json"])
+    # requisitos de monetización: datos firmados que Lirio descarga (se actualizan sin otra versión)
+    shutil.copy2(ROOT / "src" / "data" / "monetizacion.json", out / "monetizacion.json")
+    run([PUBLICAR, "firmar", out / "monetizacion.json"])
 
     # 3. Instalador firmado (la contraseña de la llave de actualizaciones va cifrada con DPAPI)
     env = dict(os.environ, LIRIO_REPO=args.repo,

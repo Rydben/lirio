@@ -1,6 +1,6 @@
 [package]
 name = "lirio"
-version = "0.2.8"
+version = "0.2.9"
 description = "Lirio: el launcher de tus bots"
 authors = ["Lirio"]
 license = ""

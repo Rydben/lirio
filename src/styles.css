@@ -55,6 +55,18 @@ p { margin: .35rem 0; line-height: 1.45; }
 .activity > li, .list > li { content-visibility: auto; contain-intrinsic-size: auto 56px; }
 .journal-day { content-visibility: auto; contain-intrinsic-size: auto 320px; }
 .warning-text { color: #fcd34d; }
+
+/* Monetización */
+.monet .link { display: inline; color: var(--cyan); padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+.monet h4 { margin: 8px 0 0; }
+.monet__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 8px 0; }
+.monet__stat { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.monet__num { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.monet__prog { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.monet__req { margin: 8px 0; }
+.monet__req .row { justify-content: space-between; gap: 12px; }
+.monet__val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.monet__steps, .monet__ways { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
 .warn { color: var(--amber); display: flex; gap: .4rem; align-items: center; }
 .icon { flex: none; }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }

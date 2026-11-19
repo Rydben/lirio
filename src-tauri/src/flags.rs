@@ -58,6 +58,8 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("estilo-miniatura", &[("@archivo", Kind::Path)]),
     // Ajustes aprendidos de las estadísticas: verlos, borrar uno (o todo) y el interruptor general
     ("aprendido", &[]),
+    // monetización (editor y moderador): solo lectura; --ligero = lo mínimo para el tiempo real (cuida la cuota)
+    ("monetizacion", &[("--refrescar", Kind::Flag), ("--ligero", Kind::Flag)]),
     ("aprendido-borrar", &[("@que", Kind::Text)]),
     ("aprendido-activar", &[("@valor", Kind::Choice(&["si", "no"]))]),
     // Poner a editar un directo descargado: vuelve enseguida (a la cola del watcher o en segundo plano);

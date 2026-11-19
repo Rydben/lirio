@@ -19,9 +19,11 @@ const loadBot = () => import('./pages/BotPage')
 const loadSettings = () => import('./pages/SettingsPage')
 const loadJournal = () => import('./pages/JournalPage')
 const loadWelcome = () => import('./pages/Welcome')
+const loadMonet = () => import('./pages/MonetizationPage')
 const BotPage = lazy(() => loadBot().then((m) => ({ default: m.BotPage })))
 const SettingsPage = lazy(() => loadSettings().then((m) => ({ default: m.SettingsPage })))
 const JournalPage = lazy(() => loadJournal().then((m) => ({ default: m.JournalPage })))
+const MonetizationPage = lazy(() => loadMonet().then((m) => ({ default: m.MonetizationPage })))
 const Welcome = lazy(() => loadWelcome().then((m) => ({ default: m.Welcome })))
 function preloadPages() {
   const go = () => { void loadBot(); void loadSettings(); void loadJournal() }
@@ -44,6 +46,7 @@ export type Page =
   | { kind: 'approvals' }
   | { kind: 'settings' }
   | { kind: 'journal' }
+  | { kind: 'monetizacion' }
 
 const BOT_ICONS: Record<string, string> = { 'twitch-autoeditor': 'film', 'thumbnail-bot': 'image', 'twitch-moderator': 'shield' }
 
@@ -68,7 +71,7 @@ function WithStore() {
 export function pageFromHash(hash: string): Page {
   const [kind, id, tab] = hash.replace(/^#\/?/, '').split('/')
   if (kind === 'bot' && id) return { kind: 'bot', id, tab: (tab || undefined) as BotTab | undefined }
-  if (kind === 'approvals' || kind === 'settings' || kind === 'journal') return { kind }
+  if (kind === 'approvals' || kind === 'settings' || kind === 'journal' || kind === 'monetizacion') return { kind }
   return { kind: 'home' }
 }
 
@@ -123,6 +126,7 @@ function Main() {
       { label: 'Aprobaciones', page: { kind: 'approvals' } },
       { label: 'Configuración', page: { kind: 'settings' } },
       { label: 'Diario', page: { kind: 'journal' } },
+      { label: 'Monetización', page: { kind: 'monetizacion' } },
       { label: 'Cola de subida', page: { kind: 'bot', id: 'twitch-autoeditor', tab: 'cola' } },
       { label: 'Vídeos en espera', page: { kind: 'bot', id: 'twitch-autoeditor', tab: 'espera' } },
       ...bots.map((b) => ({ label: b.name, page: { kind: 'bot', id: b.id } as Page })),
@@ -156,6 +160,7 @@ function Main() {
             <span key={b.id}>{navBtn({ kind: 'bot', id: b.id }, BOT_ICONS[b.id] ?? 'bolt', b.name, b.parent ? ' nav__sub' : '')}</span>
           ))}
           {navBtn({ kind: 'approvals' }, 'check', 'Aprobaciones', '', pendingCount)}
+          {navBtn({ kind: 'monetizacion' }, 'coin', 'Monetización')}
           {navBtn({ kind: 'journal' }, 'clock', 'Diario')}
           {navBtn({ kind: 'settings' }, 'settings', 'Configuración')}
         </nav>
@@ -205,6 +210,7 @@ function Main() {
             {page.kind === 'approvals' && <ApprovalsPage />}
             {page.kind === 'settings' && <SettingsPage />}
             {page.kind === 'journal' && <JournalPage />}
+            {page.kind === 'monetizacion' && <MonetizationPage />}
             </Suspense>
           </ErrorBoundary>
         </div>

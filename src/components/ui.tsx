@@ -26,6 +26,7 @@ const ICONS: Record<string, ReactNode> = {
   max: <rect x="5" y="5" width="14" height="14" rx="1.5" />,
   close: <path d="m6 6 12 12M18 6 6 18" />,
   alert: <><path d="M12 3 2 20h20z" /><path d="M12 10v4m0 3v.01" /></>,
+  coin: <><circle cx="12" cy="12" r="9" /><path d="M12 6.5v11M15 9.2c0-1.2-1.3-1.9-3-1.9s-3 .7-3 1.9 1.3 1.7 3 2.2 3 1 3 2.3-1.3 2-3 2-3-.8-3-2" /></>,
   yt: <><rect x="2" y="5" width="20" height="14" rx="4" /><path d="m10 9 5 3-5 3z" /></>,
 }
 
