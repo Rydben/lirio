@@ -123,3 +123,19 @@ mod tests {
         assert_eq!(raw.len(), 32);
     }
 }
+
+#[cfg(test)]
+mod zip_portatil_real {
+    /// LIRIO_E2E_ZIP=<ruta del zip portátil> cargo test zip_portatil_real -- --ignored
+    #[test]
+    #[ignore]
+    fn signed_by_the_publisher() {
+        let p = std::path::PathBuf::from(std::env::var("LIRIO_E2E_ZIP").expect("LIRIO_E2E_ZIP"));
+        let zip = std::fs::read(&p).unwrap();
+        let sig = std::fs::read_to_string(p.with_extension("zip.sig")).unwrap();
+        super::verify_signature(&zip, &sig, super::PUBLISHER_KEY).unwrap();
+        let mut bad = zip.clone();
+        bad[100] ^= 1;
+        assert!(super::verify_signature(&bad, &sig, super::PUBLISHER_KEY).is_err());
+    }
+}
