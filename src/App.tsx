@@ -1,5 +1,5 @@
 // Estructura de Lirio: menú lateral, barra superior (búsqueda y botones de ventana) y la página activa.
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { ApprovalCard } from './components/Approvals'
 import { LirioLogo } from './components/LirioLogo'
@@ -10,11 +10,33 @@ import { Icon, ToastProvider, useToast } from './components/ui'
 import { api, inTauri, type UploadEvent } from './lib/api'
 import { moodFor } from './lib/mood'
 import { StoreProvider, useStore } from './lib/store'
-import { BotPage, type BotTab } from './pages/BotPage'
+import type { BotTab } from './pages/BotPage'
 import { Home } from './pages/Home'
-import { JournalPage } from './pages/JournalPage'
-import { Welcome } from './pages/Welcome'
-import { SettingsPage } from './pages/SettingsPage'
+
+// Solo Inicio va en el arranque; el resto de páginas se cargan aparte (arranque más corto) y se precargan
+// en cuanto Lirio está quieto, para que cambiar de página nunca espere.
+const loadBot = () => import('./pages/BotPage')
+const loadSettings = () => import('./pages/SettingsPage')
+const loadJournal = () => import('./pages/JournalPage')
+const loadWelcome = () => import('./pages/Welcome')
+const BotPage = lazy(() => loadBot().then((m) => ({ default: m.BotPage })))
+const SettingsPage = lazy(() => loadSettings().then((m) => ({ default: m.SettingsPage })))
+const JournalPage = lazy(() => loadJournal().then((m) => ({ default: m.JournalPage })))
+const Welcome = lazy(() => loadWelcome().then((m) => ({ default: m.Welcome })))
+function preloadPages() {
+  const go = () => { void loadBot(); void loadSettings(); void loadJournal() }
+  if ('requestIdleCallback' in window) window.requestIdleCallback(go, { timeout: 2000 }); else setTimeout(go, 500)
+}
+
+/** Lo que se ve mientras llega una página: la forma de la página, sin saltos. */
+export function PageSkeleton() {
+  return (
+    <div className="stack" aria-busy="true" aria-label="Cargando">
+      <div className="panel skeleton skeleton--head" />
+      <div className="panel skeleton skeleton--body" />
+    </div>
+  )
+}
 
 export type Page =
   | { kind: 'home' }
@@ -68,11 +90,12 @@ function Shell() {
   useEffect(() => { if (pin === 'ok') api.firstRun().then(setWelcome).catch(() => setWelcome(false)) }, [pin])
   if (pin === 'crear' || pin === 'pedir') return <><PinGate exists={pin === 'pedir'} onUnlocked={() => setPin('ok')} /><div className="welcome__winbtns"><WindowButtons /></div></>
   if (welcome === null) return <div className="app app--loading" />
-  if (welcome) return <><Welcome onFinish={() => setWelcome(false)} /><div className="welcome__winbtns"><WindowButtons /></div></>
+  if (welcome) return <><Suspense fallback={<div className="app app--loading" />}><Welcome onFinish={() => setWelcome(false)} /></Suspense><div className="welcome__winbtns"><WindowButtons /></div></>
   return <Main />
 }
 
 function Main() {
+  useEffect(preloadPages, [])
   const [page, setPage] = useState<Page>(() => pageFromHash(window.location.hash))
   useEffect(() => {
     const onHash = () => setPage(pageFromHash(window.location.hash))
@@ -176,11 +199,13 @@ function Main() {
           )}
           <ErrorBoundary key={JSON.stringify(page)} where={`página ${page.kind}${page.kind === 'bot' ? ` ${page.id}` : ''}`}
             onBack={() => go({ kind: 'home' })}>
+            <Suspense fallback={<PageSkeleton />}>
             {page.kind === 'home' && <Home go={go} />}
             {page.kind === 'bot' && <BotPage key={`${page.id}-${page.tab ?? ''}`} id={page.id} tab={page.tab} />}
             {page.kind === 'approvals' && <ApprovalsPage />}
             {page.kind === 'settings' && <SettingsPage />}
             {page.kind === 'journal' && <JournalPage />}
+            </Suspense>
           </ErrorBoundary>
         </div>
       </main>

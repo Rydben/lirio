@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import type { ClientInfo, YouTubeStatus } from './youtube'
+import type { CambioEvent } from './live'
 import { demo } from './demo'
 
 export type BotState =
@@ -197,7 +198,13 @@ export type SignedOperation = 'approve' | 'deny' | 'liberar' | 'reintentar'
 
 export const inTauri = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
+/** Cuántas llamadas hace la interfaz al núcleo (y cuántas lanzan la CLI de un bot): para medir el rendimiento. */
+export const llamadas: Record<string, number> = {}
+;(globalThis as Record<string, unknown>).__lirioLlamadas = llamadas
+
 function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const k = cmd === 'run_with' || cmd === 'run_command' ? `${cmd}:${String(args?.command)}` : cmd
+  llamadas[k] = (llamadas[k] ?? 0) + 1
   return inTauri() ? invoke<T>(cmd, args) : demo.call<T>(cmd, args)
 }
 
@@ -243,6 +250,9 @@ export const api = {
   jobStart: (id: string, command: string, flags: Record<string, unknown>) => call<string>('job_start', { id, command, flags }),
   jobsStatus: () => call<Record<string, JobEvent>>('jobs_status'),
   jobCancel: (clave: string) => call<boolean>('job_cancel', { clave }),
+  /** El núcleo avisa cuando cambia algo de un bot (ver live.ts). */
+  onCambio: (cb: (e: CambioEvent) => void): Promise<UnlistenFn> =>
+    inTauri() ? listen<CambioEvent>('lirio://cambio', (e) => cb(e.payload)) : demo.on('cambio', cb),
   onJob: (cb: (e: JobEvent) => void): Promise<UnlistenFn> =>
     inTauri() ? listen<JobEvent>('lirio://trabajo', (e) => cb(e.payload)) : demo.on('trabajo', cb),
   thumbnails: (id: string) => call<CliResult>('thumbnails', { id }),

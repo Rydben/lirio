@@ -1,6 +1,6 @@
 // Diario de Lirio: lo que han hecho Lirio y los bots, día a día, con espacio para tus propias notas.
 // Vive solo en este PC.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon, useToast } from '../components/ui'
 import { api, type JournalEntry } from '../lib/api'
 
@@ -36,6 +36,7 @@ export function groupByDay(entries: JournalEntry[], now = new Date()): [string, 
 export function JournalPage() {
   const toast = useToast()
   const [entries, setEntries] = useState<JournalEntry[]>([])
+  const grouped = useMemo(() => groupByDay(entries), [entries])
   const [days, setDays] = useState(7)
   const [note, setNote] = useState('')
   const load = useCallback(() => api.journal(days).then(setEntries).catch(() => {}), [days])
@@ -73,7 +74,7 @@ export function JournalPage() {
           </div>
         </header>
         {entries.length === 0 && <p className="muted">Todavía no hay nada en estos días.</p>}
-        {groupByDay(entries).map(([label, items]) => (
+        {grouped.map(([label, items]) => (
           <div key={label} className="journal-day">
             <div className="journal-day__label">{label}</div>
             <ul className="activity">

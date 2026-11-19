@@ -1,7 +1,8 @@
 // Moderador: bans recientes (con "Deshacer ban" mediante el gesto de 2 s) y lo que el bot ha hecho en el chat y por voz.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { api } from '../lib/api'
 import { useStore } from '../lib/store'
+import { useLive } from '../lib/live'
 import { HoldButton } from './HoldButton'
 import { Icon, Pill, timeAgo, useToast } from './ui'
 
@@ -17,7 +18,8 @@ export function ChatPanel({ botId }: { botId: string }) {
     api.runWith(botId, 'bans-recientes').then((r) => r.ok && setBans(r.data?.bans ?? [])).catch(() => {})
     api.botActions(botId, ['reply', 'voice_command', 'voice_action'], 30).then(setActions).catch(() => {})
   }, [botId])
-  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t) }, [load])
+  // bans-recientes lanza el Python del bot (~0,5 s): cuando el bot cambia algo, como mucho cada 30 s, y cada minuto por si acaso
+  useLive(load, [botId], 60_000, 30_000)
 
   /** Deshacer = pedir la solicitud de unban al bot y aprobarla firmada con el gesto (como cualquier aprobación). */
   const undo = async (token: string, login: string) => {

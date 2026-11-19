@@ -21,6 +21,7 @@ mod upload;
 pub mod winutil;
 mod wizard;
 mod youtube;
+mod watch;
 
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -600,22 +601,67 @@ pub fn image_data_url(p: &std::path::Path) -> Option<String> {
     Some(format!("data:{mime};base64,{}", B64.encode(std::fs::read(p).ok()?)))
 }
 
+/// Ancho de las miniaturas que se enseñan en Lirio: nítidas hasta con el escalado de Windows al 200 %
+/// (las tarjetas miden ~220–360 px), y unas 10 veces más ligeras que la imagen de 1280 px.
+pub const THUMB_WIDTH: u32 = 720;
+
+/// Versión reducida de una imagen, guardada en caché por ruta, fecha y tamaño (se rehace sola si la imagen cambia).
+/// Si algo falla, la imagen original.
+pub fn small_image_data_url(p: &std::path::Path, cache: &std::path::Path) -> Option<String> {
+    use base64::{engine::general_purpose::STANDARD as B64, Engine};
+    use std::hash::{Hash, Hasher};
+    let meta = std::fs::metadata(p).ok()?;
+    if !meta.is_file() || meta.len() > 8 * 1024 * 1024 { return None; }
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (p, meta.len(), meta.modified().ok(), THUMB_WIDTH).hash(&mut h);
+    let file = cache.join(format!("{:016x}.jpg", h.finish()));
+    if let Ok(bytes) = std::fs::read(&file) {
+        return Some(format!("data:image/jpeg;base64,{}", B64.encode(bytes)));
+    }
+    let made = (|| -> Option<Vec<u8>> {
+        let img = image::open(p).ok()?;
+        if img.width() <= THUMB_WIDTH { return None; } // ya es pequeña: se usa tal cual
+        let small = img.resize(THUMB_WIDTH, u32::MAX, image::imageops::FilterType::Triangle).to_rgb8();
+        let mut out = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 82).encode_image(&small).ok()?;
+        Some(out)
+    })();
+    match made {
+        Some(bytes) => {
+            let _ = std::fs::create_dir_all(cache);
+            let _ = std::fs::write(&file, &bytes);
+            Some(format!("data:image/jpeg;base64,{}", B64.encode(bytes)))
+        }
+        None => image_data_url(p),
+    }
+}
+
 /// Miniaturas de cada vídeo (`miniaturas` del editor) con la imagen ya leída: Lirio solo lee las que el bot lista.
 #[tauri::command]
 async fn thumbnails(state: State<'_, AppState>, id: String) -> Result<cli::CliResult, String> {
     let m = state.module(&id)?;
     let mut cmd = cli::build_command_with_flags(&m, "miniaturas", &serde_json::Map::new())?;
+    let cache = state.data_dir.join("cache").join("miniaturas");
     tauri::async_runtime::spawn_blocking(move || {
         let out = cmd.output().map_err(|e| e.to_string())?;
         let mut r = cli::interpret(out.status.code().unwrap_or(-1), &out.stdout, &out.stderr);
         if let Some(videos) = r.data["videos"].as_array_mut() {
             videos.truncate(30);
-            for v in videos.iter_mut() {
-                for t in v["miniaturas"].as_array_mut().into_iter().flatten() {
-                    let img = t["ruta"].as_str().and_then(|p| image_data_url(std::path::Path::new(p)));
-                    t["img"] = img.map(Value::String).unwrap_or(Value::Null);
+            let thumbs: Vec<&mut Value> = videos.iter_mut()
+                .flat_map(|v| v["miniaturas"].as_array_mut().into_iter().flatten()).collect();
+            // la primera vez hay que reducirlas: en paralelo (luego salen de la caché)
+            let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, 8);
+            let per = thumbs.len().div_ceil(workers).max(1);
+            let mut thumbs = thumbs;
+            std::thread::scope(|sc| {
+                for chunk in thumbs.chunks_mut(per) {
+                    let cache = &cache;
+                    sc.spawn(move || for t in chunk.iter_mut() {
+                        let img = t["ruta"].as_str().and_then(|p| small_image_data_url(std::path::Path::new(p), cache));
+                        t["img"] = img.map(Value::String).unwrap_or(Value::Null);
+                    });
                 }
-            }
+            });
         }
         Ok(r)
     }).await.map_err(|e| e.to_string())?
@@ -875,6 +921,7 @@ pub fn run() {
                     if let Some(d) = &webview_dir { b = b.data_directory(d.clone()); }
                     b.build()?;
                 }
+                watch::start(app.handle().clone());
                 // aquí ya sabemos que somos la única ventana de Lirio (single-instance va antes)
                 UNEXPECTED_CLOSE.store(closed_unexpectedly(&mark, winutil::boot_time()), std::sync::atomic::Ordering::Relaxed);
                 let _ = std::fs::write(&mark, chrono::Utc::now().to_rfc3339());
@@ -906,6 +953,54 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thumbnails_are_shrunk_and_cached() {
+        let d = tempfile::tempdir().unwrap();
+        let src = d.path().join("v_miniatura.jpg");
+        let img = image::RgbImage::from_fn(1280, 720, |x, y| image::Rgb([(x % 256) as u8, (y % 256) as u8, ((x ^ y) % 256) as u8]));
+        img.save(&src).unwrap();
+        let cache = d.path().join("cache");
+        let small = small_image_data_url(&src, &cache).unwrap();
+        let full = image_data_url(&src).unwrap();
+        assert!(small.starts_with("data:image/jpeg;base64,"));
+        assert!(small.len() < full.len(), "{} vs {}", small.len(), full.len());
+        let bytes = { use base64::Engine; base64::engine::general_purpose::STANDARD.decode(&small[23..]).unwrap() };
+        assert_eq!(image::load_from_memory(&bytes).unwrap().width(), THUMB_WIDTH);
+        assert_eq!(std::fs::read_dir(&cache).unwrap().count(), 1);
+        assert_eq!(small_image_data_url(&src, &cache).unwrap(), small, "la segunda vez sale de la caché");
+        // una imagen pequeña no se toca
+        let tiny = d.path().join("t.png");
+        image::RgbImage::new(100, 50).save(&tiny).unwrap();
+        assert_eq!(small_image_data_url(&tiny, &cache), image_data_url(&tiny));
+    }
+
+    /// Cifras reales: `cargo test --lib miniaturas_reales -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn miniaturas_reales() {
+        let root = std::path::Path::new(r"C:\Users\carlo\Projects\twitch-autoeditor\output");
+        let cache = tempfile::tempdir().unwrap();
+        let files: Vec<std::path::PathBuf> = std::fs::read_dir(root).unwrap().flatten()
+            .flat_map(|d| std::fs::read_dir(d.path()).unwrap().flatten().map(|f| f.path()))
+            .filter(|p| p.file_name().unwrap().to_string_lossy().contains("miniatura") && image_data_url(p).is_some())
+            .collect();
+        let t0 = std::time::Instant::now();
+        let full: usize = files.iter().map(|p| image_data_url(p).unwrap().len()).sum();
+        let t_full = t0.elapsed();
+        let t1 = std::time::Instant::now();
+        let cdir = cache.path();
+        let small: usize = std::thread::scope(|sc| {
+            let hs: Vec<_> = files.chunks(files.len().div_ceil(8).max(1)).map(|c| sc.spawn(move || c.iter()
+                .map(|p| small_image_data_url(p, cdir).unwrap().len()).sum::<usize>())).collect();
+            hs.into_iter().map(|h| h.join().unwrap()).sum()
+        });
+        let t_first = t1.elapsed();
+        let t2 = std::time::Instant::now();
+        for p in &files { let _ = small_image_data_url(p, cache.path()); }
+        println!("{} miniaturas: antes {} KB en {:?}; ahora {} KB (primera vez {:?}, con caché {:?})",
+                 files.len(), full / 1024, t_full, small / 1024, t_first, t2.elapsed());
+    }
 
     #[test]
     fn portable_channel_only_accepts_its_own_zip() {

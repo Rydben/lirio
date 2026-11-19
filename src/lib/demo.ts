@@ -63,6 +63,7 @@ const activity = (): ActivityItem[] => [
 const ok: CliResult = { ok: true, code: 0, data: { ok: true }, message: 'Hecho (demostración)' }
 let uploadCb: ((e: UploadEvent) => void) | null = null
 const listeners: Record<string, Set<(e: any) => void>> = {}
+let heartbeat: ReturnType<typeof setInterval> | undefined
 const fire = (name: string, steps: any[], ms = 250) =>
   steps.forEach((s, i) => setTimeout(() => listeners[name]?.forEach((cb) => cb(s)), ms * (i + 1)))
 
@@ -215,6 +216,8 @@ export const demo = {
     }
   },
   async on(name: string, cb: (e: any) => void) {
+    // como el moderador de verdad, que escribe su estado cada 5 s
+    if (name === 'cambio' && !heartbeat) heartbeat = setInterval(() => listeners.cambio?.forEach((f) => f({ bots: ['twitch-moderator'], config: false })), 5000)
     ;(listeners[name] ??= new Set()).add(cb)
     return () => { listeners[name]?.delete(cb) }
   },

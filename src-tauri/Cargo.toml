@@ -1,6 +1,6 @@
 [package]
 name = "lirio"
-version = "0.2.7"
+version = "0.2.8"
 description = "Lirio: el launcher de tus bots"
 authors = ["Lirio"]
 license = ""
@@ -22,6 +22,7 @@ serde_json = { version = "1.0", features = ["preserve_order"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 rand = "0.8"
 base64 = "0.22"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
 dirs = "5"
@@ -63,3 +64,40 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+# Las miniaturas se reducen en Lirio: estas librerías van siempre optimizadas para velocidad (el resto, por tamaño).
+[profile.dev.package.image]
+opt-level = 3
+
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+
+[profile.dev.package.zune-core]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
+[profile.dev.package.image-webp]
+opt-level = 3
+
+[profile.dev.package.fdeflate]
+opt-level = 3
+
+[profile.release.package.image]
+opt-level = 3
+
+[profile.release.package.zune-jpeg]
+opt-level = 3
+
+[profile.release.package.zune-core]
+opt-level = 3
+
+[profile.release.package.png]
+opt-level = 3
+
+[profile.release.package.image-webp]
+opt-level = 3
+
+[profile.release.package.fdeflate]
+opt-level = 3

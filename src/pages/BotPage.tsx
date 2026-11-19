@@ -22,6 +22,8 @@ import { Icon, Pill, ProgressBar, timeAgo, useToast } from '../components/ui'
 import { api, pendingApprovals, type BotView, type Details, type QueueItem } from '../lib/api'
 import { keyProblem, stateLabel, stateTone } from '../lib/mood'
 import { useStore } from '../lib/store'
+import { useLive } from '../lib/live'
+import { remember, remembered } from '../lib/remember'
 import { botSummary } from './Home'
 
 export type BotTab = 'resumen' | 'cola' | 'espera' | 'aprobaciones' | 'estadisticas' | 'chat' | 'twitch' | 'voz' | 'ajustes'
@@ -35,14 +37,19 @@ const OTHER_TABS: [BotTab, string][] = [['resumen', 'Resumen'], ['aprobaciones',
 
 /** Lo que el bot sabe hacer desde Lirio, preguntándole (los manifiestos no siempre lo declaran todo). */
 function useCapabilities(bot: BotView | undefined) {
-  const [caps, setCaps] = useState({ voz: false, ajustes: false })
+  const key = bot && !bot.parent ? `caps:${bot.id}@${bot.version}` : ''
+  const ask = (b: BotView) => () =>
+    Promise.all([api.runWith(b.id, 'voz-texto').catch(() => null), api.runWith(b.id, 'ajustes-esquema').catch(() => null)])
+      .then(([v, a]) => ({ voz: !!v?.ok || b.commands.includes('enroll'), ajustes: !!a?.ok }))
+  const [caps, setCaps] = useState(() => (key && bot ? remembered<{ voz: boolean; ajustes: boolean }>(key) : undefined) ?? { voz: false, ajustes: false })
   useEffect(() => {
-    if (!bot || bot.parent) return
+    if (!key || !bot) return
     let alive = true
-    Promise.all([api.runWith(bot.id, 'voz-texto').catch(() => null), api.runWith(bot.id, 'ajustes-esquema').catch(() => null)])
-      .then(([v, a]) => { if (alive) setCaps({ voz: !!v?.ok || bot.commands.includes('enroll'), ajustes: !!a?.ok }) })
+    const c = remember(key, ask(bot), (v) => { if (alive) setCaps(v) })
+    if (c) setCaps(c)
     return () => { alive = false }
-  }, [bot?.id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
   return caps
 }
 
@@ -50,13 +57,15 @@ function useCapabilities(bot: BotView | undefined) {
  *  En la página del bot de miniaturas se pregunta a su bot principal, que es quien tiene esos comandos. */
 function useEditorPages(bot: BotView | undefined) {
   const target = bot?.parent ?? bot?.id
-  const [ok, setOk] = useState(false)
+  const key = target ? `paginas:${target}` : ''
+  const [ok, setOk] = useState(() => (key && remembered<boolean>(key)) || false)
   useEffect(() => {
     if (!target) return
     let alive = true
-    api.runWith(target, 'carpetas').then((r) => { if (alive) setOk(!!r.ok && !!r.data?.editados) }).catch(() => {})
+    const c = remember(key, () => api.runWith(target, 'carpetas').then((r) => !!r.ok && !!r.data?.editados), (v) => { if (alive) setOk(v) })
+    if (c !== undefined) setOk(c)
     return () => { alive = false }
-  }, [target])
+  }, [target, key])
   return { ok, target: target ?? '' }
 }
 
@@ -69,11 +78,7 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
   const editor = useEditorPages(bot)
 
   const load = useCallback(() => api.details(id).then(setDetails).catch(() => setDetails(null)), [id])
-  useEffect(() => {
-    load()
-    const t = setInterval(load, 4000)
-    return () => clearInterval(t)
-  }, [load])
+  useLive(load, [id])
 
   if (!bot) return <div className="panel">No encuentro este bot.</div>
   const isVideo = bot.id === 'twitch-autoeditor'

@@ -42,6 +42,18 @@ p { margin: .35rem 0; line-height: 1.45; }
 .accent { color: var(--violet-soft); }
 .ok-text { color: var(--green); }
 .error-text { color: #fb7185; }
+
+/* Esqueleto mientras llega una página: misma forma, sin saltos; el brillo se mueve con transform */
+.skeleton { position: relative; overflow: hidden; border-color: transparent; }
+.skeleton--head { height: 120px; }
+.skeleton--body { height: 320px; margin-top: 16px; }
+.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .05), transparent); animation: shimmer 1.4s ease-in-out infinite; }
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+/* Listas largas (diario, chat, papelera): lo que no se ve no se dibuja */
+.activity > li, .list > li { content-visibility: auto; contain-intrinsic-size: auto 56px; }
+.journal-day { content-visibility: auto; contain-intrinsic-size: auto 320px; }
 .warning-text { color: #fcd34d; }
 .warn { color: var(--amber); display: flex; gap: .4rem; align-items: center; }
 .icon { flex: none; }
@@ -151,7 +163,8 @@ p { margin: .35rem 0; line-height: 1.45; }
 .progress { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
 .progress__track { flex: 1; height: 10px; background: rgba(255, 255, 255, .08); border-radius: 999px; overflow: hidden; }
 .progress__fill {
-  height: 100%; border-radius: inherit; transition: width .45s ease;
+  /* la barra crece con transform (la mueve la tarjeta gráfica, a 60 fps), no con width (recalcula la página) */
+  height: 100%; width: 100%; transform-origin: left center; transition: transform .45s ease;
   background: linear-gradient(90deg, var(--violet), var(--cyan)); box-shadow: 0 0 12px var(--cyan-glow);
 }
 .progress__pct { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 3.2em; text-align: right; }
@@ -231,7 +244,8 @@ p { margin: .35rem 0; line-height: 1.45; }
 .free > div { color: var(--text); }
 
 /* ---------- avatar ---------- */
-.avatar { position: relative; z-index: 1; animation: float 5s ease-in-out infinite; filter: drop-shadow(0 10px 24px rgba(0, 0, 0, .55)); }
+.avatar { position: relative; z-index: 1; animation: float 5s ease-in-out infinite; filter: drop-shadow(0 10px 24px rgba(0, 0, 0, .55));
+  will-change: transform; /* capa propia: flotar no repinta la sombra ni la ilustración */ }
 .avatar svg { display: block; overflow: visible; }
 .neon { color: var(--cyan); stroke: var(--cyan); fill: none; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
 .neon .fill { fill: var(--cyan); }
@@ -248,7 +262,7 @@ p { margin: .35rem 0; line-height: 1.45; }
 .chip { border: 1px solid var(--line-2); background: var(--bg-2); border-radius: 999px; padding: 6px 12px; font-size: .85rem; }
 .chip.is-active { border-color: var(--cyan); color: var(--cyan); }
 
-@keyframes float { 50% { transform: translateY(-6px); } }
+@keyframes float { 50% { transform: translate3d(0, -6px, 0); } }
 @keyframes blink-main { 0%, 92.9%, 97%, 100% { opacity: 1; } 93%, 96.9% { opacity: 0; } }
 @keyframes blink-alt { 0%, 92.9%, 97%, 100% { opacity: 0; } 93%, 96.9% { opacity: 1; } }
 @keyframes flicker { 0%, 96%, 100% { opacity: 1; } 97% { opacity: .75; } 98% { opacity: 1; } 99% { opacity: .85; } }

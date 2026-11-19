@@ -1,10 +1,11 @@
 // Página de inicio (maqueta): bienvenida con el avatar, tus bots, actividad, pendientes, estado y accesos.
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { ScreenFace } from '../components/Face'
 import { api, type ActivityItem, type BotView } from '../lib/api'
 import { moodFor, stateLabel, stateTone } from '../lib/mood'
 import { useStore } from '../lib/store'
+import { useLive } from '../lib/live'
 import { Icon, Pill, ProgressBar, timeAgo, useToast } from '../components/ui'
 import type { Page } from '../App'
 
@@ -35,12 +36,8 @@ export function Home({ go }: { go: (p: Page) => void }) {
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const toast = useToast()
 
-  useEffect(() => {
-    const load = () => api.activity().then(setActivity).catch(() => {})
-    load()
-    const t = setInterval(load, 10000)
-    return () => clearInterval(t)
-  }, [])
+  // la actividad lee el registro de The Wall: como mucho cada 15 s
+  useLive(() => api.activity().then(setActivity).catch(() => {}), 'any', 60_000, 15_000)
 
   const bots = overview?.modules ?? []
   const mood = moodFor(bots, Object.keys(uploads).length > 0)

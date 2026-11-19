@@ -1,6 +1,7 @@
 // Estado compartido: resumen de bots (se refresca solo) y subidas en curso (eventos en tiempo real).
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, type Overview, type UploadEvent } from './api'
+import { useLive } from './live'
 
 interface Store {
   overview: Overview | null
@@ -11,7 +12,6 @@ interface Store {
 }
 
 const Ctx = createContext<Store | null>(null)
-export const REFRESH_MS = 3000
 
 export function StoreProvider({ children, onUploadDone }: { children: ReactNode; onUploadDone?: (e: UploadEvent) => void }) {
   const [overview, setOverview] = useState<Overview | null>(null)
@@ -24,17 +24,14 @@ export function StoreProvider({ children, onUploadDone }: { children: ReactNode;
   const refresh = useCallback(async () => {
     try {
       setOverview(await api.overview())
+      if (!performance.getEntriesByName('lirio:primera-pantalla').length) performance.mark('lirio:primera-pantalla')
       setError(null)
     } catch (e) {
       setError(String(e))
     }
   }, [])
 
-  useEffect(() => {
-    refresh()
-    const t = setInterval(refresh, REFRESH_MS)
-    return () => clearInterval(t)
-  }, [refresh])
+  useLive(refresh, 'any')
 
   useEffect(() => {
     const un = api.onUpload((e) => {
