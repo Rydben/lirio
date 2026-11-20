@@ -16,7 +16,7 @@ use crate::{cli, flags, winutil, AppState};
 /// Comandos que van siempre como trabajo en segundo plano (los demás, con `run_with` y tiempo límite).
 /// (`editar` vuelve enseguida: a la cola del watcher o en segundo plano; su avance sale en status.json)
 /// `auth` también: espera a que el amigo acepte en su navegador (o a que se cancele si Google le enseña un error).
-pub const LONG: &[&str] = &["estilo-video", "estilo-miniatura", "miniaturas-generar", "auth"];
+pub const LONG: &[&str] = &["estilo-video", "estilo-miniatura", "miniaturas-generar", "auth", "guion"];
 
 struct Job {
     pid: Option<u32>,

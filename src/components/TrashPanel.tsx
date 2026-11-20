@@ -2,6 +2,7 @@
 // el editor crea una solicitud por archivo, Lirio la firma con el gesto (aprobar-firmado) y se repite el borrado.
 // Ninguna IA borra sola. El borrado automático se cambia en Ajustes (y aun así el editor pide aprobación).
 import { useCallback, useEffect, useState } from 'react'
+import { GuionPanel } from './GuionPanel'
 import { api } from '../lib/api'
 import { HoldButton } from './HoldButton'
 import { Icon, Pill, timeAgo, useToast } from './ui'
@@ -23,6 +24,7 @@ export function TrashPanel({ botId, goSettings }: { botId: string; goSettings?: 
   const [t, setT] = useState<Trash | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
+  const [guionDe, setGuionDe] = useState<{ ruta: string; archivo: string } | null>(null)
   /** Lo pone a editar (o a la cola del watcher). Vuelve enseguida; el avance se ve en Resumen. */
   const editNow = async (ruta: string) => {
     setEditing(ruta)
@@ -107,6 +109,11 @@ export function TrashPanel({ botId, goSettings }: { botId: string; goSettings?: 
                   </div>
                   <div className="row">
                     {(d.estado === 'pendiente' || d.estado === 'en_espera') && (
+                      <button className="btn btn--ghost" onClick={() => setGuionDe(guionDe?.ruta === d.ruta ? null : { ruta: d.ruta, archivo: d.archivo })}>
+                        {guionDe?.ruta === d.ruta ? 'Ocultar guion' : 'Ver guion'}
+                      </button>
+                    )}
+                    {(d.estado === 'pendiente' || d.estado === 'en_espera') && (
                       <button className="btn btn--primary" disabled={editing !== null} onClick={() => editNow(d.ruta)}>
                         <Icon name="play" size={16} /> {editing === d.ruta ? 'Un momento…' : 'Editar ahora'}
                       </button>
@@ -118,6 +125,7 @@ export function TrashPanel({ botId, goSettings }: { botId: string; goSettings?: 
             </ul>
           )}
         </section>
+        {guionDe && <GuionPanel botId={botId} ruta={guionDe.ruta} archivo={guionDe.archivo} />}
         <section className="panel">
           <h3>Vídeos editados</h3>
           {t.editados.length === 0 ? <p className="muted">Nada por aquí.</p> : (

@@ -54,6 +54,8 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("estilo-chat", &[("@mensaje", Kind::LongText)]),
     ("estilo-instruccion", &[("@texto", Kind::LongText)]),
     ("estilo-borrar", &[("@que", Kind::Text)]),
+    // guion del editor (modo historia): lee el directo y propone la historia sin renderizar
+    ("guion", &[("@archivo", Kind::Path), ("--nombre", Kind::Text)]),
     // censura de palabrotas del editor
     ("censura", &[]),
     ("censura-anadir", &[("@texto", Kind::Text)]),
