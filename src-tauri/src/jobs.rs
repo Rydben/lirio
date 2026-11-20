@@ -16,7 +16,7 @@ use crate::{cli, flags, winutil, AppState};
 /// Comandos que van siempre como trabajo en segundo plano (los demás, con `run_with` y tiempo límite).
 /// (`editar` vuelve enseguida: a la cola del watcher o en segundo plano; su avance sale en status.json)
 /// `auth` también: espera a que el amigo acepte en su navegador (o a que se cancele si Google le enseña un error).
-pub const LONG: &[&str] = &["estilo-video", "estilo-miniatura", "miniaturas-generar", "auth", "guion"];
+pub const LONG: &[&str] = &["estilo-video", "estilo-miniatura", "miniaturas-generar", "auth", "guion", "process"];
 
 struct Job {
     pid: Option<u32>,
@@ -39,6 +39,20 @@ pub fn is_running(k: &str) -> bool {
     JOBS.lock().unwrap().get(k).is_some_and(|j| j.last["hecho"] == false)
 }
 
+/// Renderizar desde Lirio nunca sube nada (la subida va después, con aprobación) y siempre lleva el nombre del guion,
+/// para escribir en su carpeta y no pisar la de un vídeo ya subido.
+pub fn check_job_flags(command: &str, flags: &serde_json::Map<String, Value>) -> Result<(), String> {
+    if command == "process" {
+        if flags.get("--no-upload") != Some(&Value::Bool(true)) {
+            return Err("Desde Lirio solo se renderiza sin subir (--no-upload).".into());
+        }
+        if !flags.get("--nombre").and_then(Value::as_str).is_some_and(|n| !n.trim().is_empty()) {
+            return Err("Falta el nombre del guion (--nombre).".into());
+        }
+    }
+    Ok(())
+}
+
 /// Lanza un trabajo largo. Error si ya hay uno igual en marcha.
 #[tauri::command]
 pub fn job_start(app: tauri::AppHandle, state: State<AppState>, id: String, command: String,
@@ -46,6 +60,7 @@ pub fn job_start(app: tauri::AppHandle, state: State<AppState>, id: String, comm
     if !LONG.contains(&command.as_str()) {
         return Err(format!("«{command}» no es un trabajo largo"));
     }
+    check_job_flags(&command, &flags)?;
     let m = state.module(&id)?;
     let mut cmd = cli::build_command_with_flags(&m, &command, &flags)?;
     let k = key(&id, &command);
@@ -160,6 +175,15 @@ pub fn output_with_timeout(mut cmd: std::process::Command, limit: std::time::Dur
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn process_never_uploads_and_needs_the_script_name() {
+        let f = |v: Value| v.as_object().unwrap().clone();
+        assert!(check_job_flags("process", &f(json!({"@archivo": "C:/d/v.mp4", "--nombre": "v_historia"}))).is_err());
+        assert!(check_job_flags("process", &f(json!({"@archivo": "C:/d/v.mp4", "--no-upload": true}))).is_err());
+        assert!(check_job_flags("process", &f(json!({"@archivo": "C:/d/v.mp4", "--nombre": "v_historia", "--no-upload": true}))).is_ok());
+        assert!(check_job_flags("guion", &f(json!({}))).is_ok());
+    }
 
     #[test]
     fn stage_lines() {

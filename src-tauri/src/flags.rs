@@ -56,6 +56,8 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("estilo-borrar", &[("@que", Kind::Text)]),
     // guion del editor (modo historia): lee el directo y propone la historia sin renderizar
     ("guion", &[("@archivo", Kind::Path), ("--nombre", Kind::Text)]),
+    // renderizar con el guion ya hecho (mismo --nombre); desde Lirio SIEMPRE con --no-upload (ver jobs.rs)
+    ("process", &[("@archivo", Kind::Path), ("--nombre", Kind::Text), ("--no-upload", Kind::Flag)]),
     // censura de palabrotas del editor
     ("censura", &[]),
     ("censura-anadir", &[("@texto", Kind::Text)]),

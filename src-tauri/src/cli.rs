@@ -60,7 +60,7 @@ fn command_for(m: &Module, command: &str, args: &[String]) -> Result<Command, St
                                    | "papelera-borrar" | "estilo" | "estilo-chat" | "estilo-instruccion" | "estilo-borrar"
                                    | "estilo-video" | "estilo-miniatura" | "editar"
                                    | "aprendido" | "aprendido-borrar" | "aprendido-activar" | "monetizacion"
-                                   | "censura" | "censura-anadir" | "censura-quitar" | "guion");
+                                   | "censura" | "censura-anadir" | "censura-quitar" | "guion" | "process");
     if !m.has_command(command) && !common {
         return Err(format!("{} no tiene el comando '{command}'", m.name()));
     }

@@ -2,6 +2,7 @@
 // cierre) sin renderizar ni subir. Tarda (transcripción + unas 10-16 llamadas a Claude): va en segundo plano.
 // Si te gusta, «Editar ahora» renderiza reutilizando ese mismo plan.
 import { useJob } from '../lib/jobs'
+import { useToast } from './ui'
 import { JobProgress } from './JobProgress'
 
 type Tramo = [number, number, string]
@@ -48,13 +49,26 @@ export function GuionView({ g }: { g: Guion }) {
 
 const lastFor = new Map<string, string>()
 
+/** `C:/d/twitch_2933735688.mp4` -> `twitch_2933735688_historia` */
+export function scriptName(ruta: string) {
+  const base = ruta.split(/[\\/]/).pop() ?? 'directo'
+  return `${base.replace(/\.[^.]+$/, '')}_historia`
+}
+
 /** Hace el guion de un directo descargado y lo enseña. Uno cada vez (es un trabajo del editor). */
 export function GuionPanel({ botId, ruta, archivo }: { botId: string; ruta: string; archivo: string }) {
+  const toast = useToast()
   const job = useJob(botId, 'guion')
   // el trabajo es uno por bot: solo se enseña si es de este directo
   const mine = lastFor.get(botId) === ruta
   const g = (mine && job.job?.hecho && job.job.ok ? job.job.resultado?.guion : null) as Guion | null
-  const start = () => { lastFor.set(botId, ruta); void job.start({ '@archivo': ruta }) }
+  // guion y render van con el mismo nombre: carpeta propia, sin pisar la del vídeo normal (ni uno ya subido)
+  const nombre = scriptName(ruta)
+  const start = () => { lastFor.set(botId, ruta); void job.start({ '@archivo': ruta, '--nombre': nombre }) }
+  const render = useJob(botId, 'process', (e) => {
+    toast(e.ok ? 'ok' : e.cancelado ? 'info' : 'error', e.ok ? 'Vídeo hecho con el guion. No se ha subido: súbelo cuando quieras desde la cola.' : e.cancelado ? 'Cancelado.' : e.resultado?.error ?? e.mensaje ?? 'No se pudo renderizar')
+  })
+  const renderNow = () => { void render.start({ '@archivo': ruta, '--nombre': nombre, '--no-upload': true }) }
   const otherRunning = job.running && !mine
   return (
     <section className="panel stack" data-testid="guion-panel">
@@ -69,7 +83,13 @@ export function GuionPanel({ botId, ruta, archivo }: { botId: string; ruta: stri
       {job.running && mine && <JobProgress job={job.job} label="Escribiendo el guion" onCancel={job.cancel} />}
       {mine && job.job?.hecho && !job.job.ok && !job.job.cancelado && <p className="error-text small">{job.job.resultado?.error ?? job.job.mensaje ?? 'No se pudo hacer el guion.'}</p>}
       {g && <GuionView g={g} />}
-      {g && <p className="muted small">Si te gusta, pulsa «Editar ahora»: el editor renderiza con este mismo guion. Si no, vuelve a hacerlo más tarde.</p>}
+      {g && !render.running && (
+        <div className="row">
+          <button className="btn btn--primary" onClick={renderNow}>Hacer el vídeo con este guion</button>
+          <span className="muted small">Usa este mismo guion (no vuelve a preguntar a la IA) y no sube nada.</span>
+        </div>
+      )}
+      {render.running && <JobProgress job={render.job} label="Haciendo el vídeo con el guion" onCancel={render.cancel} />}
     </section>
   )
 }
