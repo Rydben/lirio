@@ -73,6 +73,7 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     // Poner a editar un directo descargado: vuelve enseguida (a la cola del watcher o en segundo plano);
     // el avance sale en status.json. --rehacer: otra versión en otra carpeta, sin borrar la anterior.
     ("editar", &[("@que", Kind::Path), ("--rehacer", Kind::Flag)]),
+    ("editar-cancelar", &[("@que", Kind::Path)]),
 ];
 
 pub fn build_args(command: &str, flags: &Map<String, Value>) -> Result<Vec<String>, String> {

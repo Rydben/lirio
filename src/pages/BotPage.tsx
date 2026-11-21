@@ -10,6 +10,7 @@ import { LearnedPanel } from '../components/LearnedPanel'
 import { jobDetail, stageName, stalledInput } from '../lib/progress'
 import { StylePanel } from '../components/StylePanel'
 import { CensorPanel } from '../components/CensorPanel'
+import { LocalEditPanel } from '../components/LocalEditPanel'
 import { ThumbnailsPanel } from '../components/ThumbnailsPanel'
 import { TrashPanel } from '../components/TrashPanel'
 import { Insights } from '../components/Insights'
@@ -246,6 +247,8 @@ function Summary({ bot, details }: { bot: BotView; details: Details | null }) {
   const job = s.current_job
   const last = s.last_job
   return (
+    <>
+    {bot.id === 'twitch-autoeditor' && <LocalEditPanel bot={bot} />}
     <div className="grid-2">
       <section className="panel">
         <h3>Ahora mismo</h3>
@@ -303,6 +306,7 @@ function Summary({ bot, details }: { bot: BotView; details: Details | null }) {
       {bot.installing && <InstallPanel botId={bot.id} name={bot.name} />}
       <GpuPanel botId={bot.id} />
     </div>
+    </>
   )
 }
 

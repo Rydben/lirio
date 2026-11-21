@@ -273,6 +273,10 @@ export const api = {
       ? [{ name: 'Vídeos', extensions: ['mp4', 'mkv', 'mov', 'webm', 'flv'] }]
       : [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] }) as Promise<string | null>
       : Promise.resolve(kind === 'video' ? 'C:\\Videos\\referencia.mp4' : 'C:\\Imagenes\\referencia.png'),
+  /** Vídeo local para que lo edite el editor. */
+  pickVideo: (title: string) =>
+    inTauri() ? openDialog({ title, filters: [{ name: 'Vídeos', extensions: ['mp4', 'mkv', 'mov', 'm4v', 'webm', 'ts'] }] }) as Promise<string | null>
+      : Promise.resolve('C:\\Videos\\mi_partida.mp4'),
   uiError: (texto: string) => call<void>('ui_error', { texto }),
   portableStatus: () => call<PortableStatus>('portable_status'),
   portableCreatePin: (pin: string) => call<void>('portable_create_pin', { pin }),
