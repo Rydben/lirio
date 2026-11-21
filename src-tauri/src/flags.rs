@@ -72,7 +72,8 @@ pub const COMMANDS: &[(&str, &[(&str, Kind)])] = &[
     ("aprendido-activar", &[("@valor", Kind::Choice(&["si", "no"]))]),
     // Poner a editar un directo descargado: vuelve enseguida (a la cola del watcher o en segundo plano);
     // el avance sale en status.json. --rehacer: otra versión en otra carpeta, sin borrar la anterior.
-    ("editar", &[("@que", Kind::Path), ("--rehacer", Kind::Flag)]),
+    ("editar", &[("@que", Kind::Path), ("--rehacer", Kind::Flag), ("--modo", Kind::Choice(&["normal", "historia"])),
+                 ("--categoria", Kind::Text)]),
     ("editar-cancelar", &[("@que", Kind::Path)]),
 ];
 
@@ -229,6 +230,8 @@ mod tests {
         assert!(build_args("estilo-chat", &m(json!({"@mensaje": "a".repeat(300)}))).is_ok());
         assert!(build_args("estilo-chat", &m(json!({"@mensaje": "a".repeat(501)}))).is_err());
         assert_eq!(build_args("estilo-borrar", &m(json!({"@que": "video"}))).unwrap(), vec!["video"]);
+        assert_eq!(build_args("editar", &m(json!({"@que": "D:/v.mp4", "--modo": "historia", "--categoria": "GTA VI"}))).unwrap().len(), 5);
+        assert!(build_args("editar", &m(json!({"@que": "D:/v.mp4", "--modo": "raro"}))).is_err());
         assert_eq!(build_args("censura-anadir", &m(json!({"@texto": "me cago en"}))).unwrap(), vec!["me cago en"]);
         assert!(build_args("censura", &m(json!({"--borrar-todo": true}))).is_err());
         assert_eq!(build_args("aprendido-activar", &m(json!({"@valor": "no"}))).unwrap(), vec!["no"]);

@@ -27,6 +27,18 @@ describe('editar vídeos locales', () => {
     expect(run.mock.calls.every(([, cmd]) => cmd === 'editar')).toBe(true)
   })
 
+  it('se puede elegir el modo y el juego solo para esa edición', async () => {
+    vi.spyOn(api, 'pickVideo').mockResolvedValue('D:/gta6.mp4')
+    const run = vi.spyOn(api, 'runWith').mockResolvedValue(ok({ ok: true, mensaje: 'En cola' }))
+    render(<ToastProvider><LocalEditPanel bot={editor()} /></ToastProvider>)
+    fireEvent.click(screen.getByRole('button', { name: /Elegir vídeo/ }))
+    fireEvent.change(await screen.findByLabelText(/Cómo editarlo/), { target: { value: 'historia' } })
+    fireEvent.change(screen.getByLabelText(/Juego/), { target: { value: 'Grand Theft Auto VI' } })
+    fireEvent.click(screen.getByRole('button', { name: /Editar este vídeo/ }))
+    await waitFor(() => expect(run).toHaveBeenCalledWith('twitch-autoeditor', 'editar',
+      { '@que': 'D:/gta6.mp4', '--modo': 'historia', '--categoria': 'Grand Theft Auto VI' }))
+  })
+
   it('si ya estaba editado ofrece otra versión con --rehacer', async () => {
     vi.spyOn(api, 'pickVideo').mockResolvedValue('D:/v.mp4')
     const run = vi.spyOn(api, 'runWith')

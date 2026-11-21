@@ -25,6 +25,8 @@ export function LocalEditPanel({ bot }: { bot: BotView }) {
   const [msg, setMsg] = useState<string | null>(null)
   const [yaEditado, setYaEditado] = useState(false)
   const [over, setOver] = useState(false)
+  const [modo, setModo] = useState<'' | 'normal' | 'historia'>('')
+  const [categoria, setCategoria] = useState('')
 
   const pick = (p: string) => {
     if (!isVideo(p)) { toast('error', `Ese archivo no es un vídeo (${VIDEO_EXT.join(', ')}).`); return }
@@ -54,7 +56,11 @@ export function LocalEditPanel({ bot }: { bot: BotView }) {
   const edit = async (rehacer = false) => {
     if (!file) return
     setBusy(true)
-    const r = await api.runWith(bot.id, 'editar', rehacer ? { '@que': file, '--rehacer': true } : { '@que': file })
+    const flags: Record<string, unknown> = { '@que': file }
+    if (rehacer) flags['--rehacer'] = true
+    if (modo) flags['--modo'] = modo
+    if (categoria.trim()) flags['--categoria'] = categoria.trim().slice(0, 80)
+    const r = await api.runWith(bot.id, 'editar', flags)
     setBusy(false)
     if (r.ok) {
       setYaEditado(false)
@@ -74,7 +80,7 @@ export function LocalEditPanel({ bot }: { bot: BotView }) {
     if (r.ok) { toast('info', r.data?.mensaje ?? 'Cancelado.'); setMsg(null) }
     else if (/no tiene el comando|invalid choice|argument cmd/i.test(String(r.data?.error ?? r.message))) {
       toast('info', 'Este editor aún no sabe cancelar solo un vídeo: usa «Parar» arriba (termina la etapa en curso).')
-    } else toast('error', r.data?.error ?? r.message)
+    } else toast('error', r.data?.mensaje ?? r.data?.error ?? r.message)
   }
 
   const s = bot.status ?? {}
@@ -94,6 +100,21 @@ export function LocalEditPanel({ bot }: { bot: BotView }) {
         <button className="btn btn--outline" onClick={choose}><Icon name="upload" size={16} /> Elegir vídeo…</button>
         {file && <span className="small" title={file}>{base(file)}</span>}
       </div>
+      {file && !mineNow && !queued && (
+        <div className="row local-edit__opts">
+          <label className="small">Cómo editarlo{' '}
+            <select className="input" value={modo} onChange={(e) => setModo(e.target.value as typeof modo)}>
+              <option value="">Como siempre (tus ajustes)</option>
+              <option value="historia">Con historia (trama)</option>
+              <option value="normal">Resumen de momentos</option>
+            </select>
+          </label>
+          <label className="small">Juego (opcional){' '}
+            <input className="input" placeholder="Por ejemplo: Grand Theft Auto VI" value={categoria} maxLength={80}
+                   onChange={(e) => setCategoria(e.target.value)} />
+          </label>
+        </div>
+      )}
       {file && !mineNow && !queued && (
         <div className="row">
           {!yaEditado && <button className="btn btn--primary" disabled={busy} onClick={() => edit()}>
