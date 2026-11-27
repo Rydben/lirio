@@ -23,6 +23,7 @@ mod wizard;
 mod youtube;
 mod watch;
 mod monetizacion;
+mod voice;
 
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -961,6 +962,7 @@ pub fn run() {
             journal_read, journal_note, usage_summary, run_with, record_voice, save_settings, autostart_get, autostart_set, bot_actions,
             help_paths, last_session, open_bot_folder, thumbnails, signed_approve_deletes,
             jobs::job_start, jobs::jobs_status, jobs::job_cancel, ui_error, youtube::youtube_status, youtube::youtube_check_file, monetizacion::monetizacion_datos, moderation_captures,
+            voice::narrator_voice_status, voice::narrator_voice_install, voice::narrator_voice_cancel,
             portable_status, portable_create_pin, portable_unlock, portable_change_pin, usb::usb_drives, usb::usb_create
         ])
         .build(tauri::generate_context!())

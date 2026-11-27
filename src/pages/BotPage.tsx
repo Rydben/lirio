@@ -11,6 +11,7 @@ import { jobDetail, stageName, stalledInput } from '../lib/progress'
 import { StylePanel } from '../components/StylePanel'
 import { CensorPanel } from '../components/CensorPanel'
 import { LocalEditPanel } from '../components/LocalEditPanel'
+import { NarratorVoicePanel } from '../components/NarratorVoicePanel'
 import { ThumbnailsPanel } from '../components/ThumbnailsPanel'
 import { TrashPanel } from '../components/TrashPanel'
 import { Insights } from '../components/Insights'
@@ -152,6 +153,7 @@ export function BotPage({ id, tab: initialTab }: { id: string; tab?: BotTab }) {
             )}
           </div>
         )}
+        {tab === 'ajustes' && bot.id === 'twitch-autoeditor' && <NarratorVoicePanel botId={bot.id} />}
         {tab === 'ajustes' && (caps.ajustes ? <SettingsForm botId={bot.id} /> : <Settings bot={bot} />)}
         </ErrorBoundary>
       </div>

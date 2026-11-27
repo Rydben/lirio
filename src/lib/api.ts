@@ -126,6 +126,8 @@ export interface JobEvent {
   hecho: boolean; ok?: boolean; cancelado?: boolean; resultado?: any; mensaje?: string
 }
 
+export interface NarratorVoiceEvent { hecho: boolean; ok?: boolean; percent?: number; detalle?: string; error?: string | null }
+
 export interface PortableStatus { portatil: boolean; llavero?: boolean; desbloqueado?: boolean; carpeta?: string }
 export interface UsbDrive { letra: string; nombre: string; extraible: boolean; libre: number; total: number }
 export interface UsbEvent { paso?: string; detalle?: string; percent?: number | null; hecho: boolean; ok?: boolean; error?: string | null; avisos?: string[]; carpeta?: string }
@@ -298,6 +300,11 @@ export const api = {
   ollamaSetup: (model: string) => call<void>('ollama_setup', { model }),
   installClientSecret: (id: string, path: string) => call<string>('install_client_secret', { id, path }),
   moderationCaptures: (id: string, rutas: string[]) => call<(string | null)[]>('moderation_captures', { id, rutas }),
+  narratorVoiceStatus: (id: string) => call<{ instalada: boolean; bytes: number; descargando: boolean }>('narrator_voice_status', { id }),
+  narratorVoiceInstall: (id: string) => call<void>('narrator_voice_install', { id }),
+  narratorVoiceCancel: () => call<boolean>('narrator_voice_cancel'),
+  onNarratorVoice: (cb: (e: NarratorVoiceEvent) => void): Promise<UnlistenFn> =>
+    inTauri() ? listen<NarratorVoiceEvent>('lirio://voz-narrador', (e) => cb(e.payload)) : demo.on('voz-narrador', cb),
   monetizacionDatos: () => call<unknown>('monetizacion_datos'),
   youtubeStatus: (id: string) => call<YouTubeStatus>('youtube_status', { id }),
   youtubeCheckFile: (path: string) => call<ClientInfo>('youtube_check_file', { path }),

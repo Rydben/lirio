@@ -176,6 +176,11 @@ export const demo = {
       }
       case 'jobs_status': return {} as T
       case 'monetizacion_datos': return null as T
+      case 'narrator_voice_status': return { instalada: false, bytes: 120_575_669, descargando: false } as T
+      case 'narrator_voice_install':
+        fire('voz-narrador', [{ hecho: false, percent: 30, detalle: '36 MB de 121 MB' }, { hecho: false, percent: 80, detalle: '96 MB de 121 MB' }, { hecho: true, ok: true }])
+        return undefined as T
+      case 'narrator_voice_cancel': return true as T
       case 'moderation_captures': return ((args?.rutas as string[]) ?? []).map(() => null) as T
       case 'youtube_status': return { estado: 'ok', project_id: 'lirio-demo-1', autorizado_en: new Date().toISOString(), dias_restantes: 7, client_secret: true, token: true } as T
       case 'youtube_check_file': return { tipo: 'installed', project_id: 'lirio-demo-1' } as T
