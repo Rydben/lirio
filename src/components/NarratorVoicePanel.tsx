@@ -34,7 +34,7 @@ export function NarratorVoicePanel({ botId }: { botId: string }) {
     <section className="panel" data-testid="voz-narrador">
       <h3><Icon name="play" size={18} /> Voz del narrador</h3>
       {st.instalada ? (
-        <p className="ok-text small">Instalada. En los ajustes del narrador, elige el motor «kokoro» para que hable con esta voz.</p>
+        <p className="ok-text small">Instalada: el narrador ya habla con esta voz (no hace falta tocar nada en Ajustes).</p>
       ) : (
         <>
           <p className="muted small">

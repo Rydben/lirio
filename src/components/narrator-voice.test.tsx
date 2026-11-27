@@ -23,6 +23,6 @@ describe('voz del narrador', () => {
     expect(cancel).toHaveBeenCalled()
     status.mockResolvedValue({ instalada: true, bytes: 120_575_669, descargando: false })
     act(() => emit({ hecho: true, ok: true }))
-    await waitFor(() => expect(screen.getByText(/elige el motor «kokoro»/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/el narrador ya habla con esta voz/)).toBeInTheDocument())
   })
 })
